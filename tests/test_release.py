@@ -33,6 +33,14 @@ def write(path: Path, text: str) -> Path:
     return path
 
 
+@pytest.fixture(autouse=True)
+def git_identity(monkeypatch):
+    # release.build commits; a machine with no git identity (a CI runner) refuses to.
+    for role in ("AUTHOR", "COMMITTER"):
+        monkeypatch.setenv(f"GIT_{role}_NAME", "Release Test")
+        monkeypatch.setenv(f"GIT_{role}_EMAIL", "release-test@example.invalid")
+
+
 @pytest.fixture
 def mono(tmp_path):
     root = tmp_path / "mono"
