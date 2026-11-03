@@ -1,0 +1,11 @@
+id	name	amount	date	double
+1	alpha	10.5	2026-01-05T00:00:00	
+2		20	2026-02-05T00:00:00	
+3	gamma			
+4	delta	7.25	2026-04-05T00:00:00	
+
+Quarterly notes	
+	
+key	value
+owner	ops
+status	

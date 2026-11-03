@@ -1,0 +1,92 @@
+{
+  "_about": "Reviewed expectations for real_samples/. Every file in this folder must have an entry. 'verified' says how a human confirmed the expectation; update it when an expectation changes.",
+  "files": {
+    "cover_unmapped.pdf": {
+      "pdf": {
+        "pages": 1,
+        "readable": 1,
+        "unreadable": 0,
+        "blank": 0,
+        "flags": {
+          "1": [
+            "unmapped_glyphs",
+            "full_page_image_under_text"
+          ]
+        }
+      },
+      "verified": "1-page cover over a full-page background image whose font ToUnicode CMap omits glyph 0x0001 between 'Department' and 'of': flagged unmapped_glyphs + full_page_image_under_text, replaced with U+FFFD on parse."
+    },
+    "events.json": {
+      "status": "not_inspected",
+      "verified": "10-record top-level JSON array. Probe counts .json as not_inspected; parse_json extracts all 10 objects with top_level='list'."
+    },
+    "inventory.xlsx": {
+      "xlsx": [
+        {
+          "name": "Field Descriptions",
+          "header_row": 1,
+          "data_rows": 4,
+          "columns": 2,
+          "flags": [
+            "possible_title_row"
+          ]
+        },
+        {
+          "name": "Inventory",
+          "header_row": 1,
+          "data_rows": 3,
+          "columns": 5,
+          "flags": []
+        }
+      ],
+      "verified": "Field Descriptions has a single-cell title in A1 above the real header, flagged possible_title_row. Inventory has 3 data rows, sparse nulls, and a trailing blank row trimmed by parse_xlsx."
+    },
+    "project_report.pdf": {
+      "pdf": {
+        "pages": 2,
+        "readable": 2,
+        "unreadable": 0,
+        "blank": 0,
+        "flags": {}
+      },
+      "verified": "2-page born-digital report with a 24pt letter-spaced title ('PROJECT REPORT', extracted cleanly under the 0.22 em font-relative word gap), a soft-hyphenated word ('minority-owned'), and a ruled 3x3 table on page 1."
+    },
+    "template.docx": {
+      "docx": {
+        "paragraphs": 6,
+        "headings": 4,
+        "heading_levels": [
+          1,
+          2,
+          3,
+          4
+        ],
+        "tables": 2,
+        "heading_level_skips": 0,
+        "possible_unstyled_headings": 2
+      },
+      "verified": "Word template with nested headings H1-H4 (no skips), 2 action-step tables, 6 body paragraphs, and 2 short bold form prompts flagged as possible_unstyled_headings."
+    },
+    "type3_unnamed.pdf": {
+      "pdf": {
+        "pages": 2,
+        "readable": 0,
+        "unreadable": 2,
+        "blank": 0,
+        "flags": {},
+        "reasons": {
+          "1": [
+            "font_without_unicode_map"
+          ],
+          "2": [
+            "font_without_unicode_map"
+          ]
+        },
+        "font_subtypes": [
+          "Type3"
+        ]
+      },
+      "verified": "2-page PDF whose Type 3 font uses numeric /Differences glyph names (/0, /1, /2, ...) starting at code 32 and no /ToUnicode. Rejected by the gate with font_without_unicode_map; recognised by parse_ocr via PDFium + Tesseract."
+    }
+  }
+}

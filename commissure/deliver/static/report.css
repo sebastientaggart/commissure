@@ -1,0 +1,1326 @@
+/* First-party page chrome for `render_page` deliverables and `Interface` (`commissure serve`).
+ * Loaded after `pico.min.css`; override `--brand-*` on `:root` in `recipe/brand/brand.css`.
+ *
+ * Ready-made body-fragment primitives (reuse instead of page-local `<style>` themes):
+ * - Summary strip: `.kpis > .kpi` (`<strong>123</strong> Label`)
+ * - Cards & empty state: `<article>` (`<h2>` first child), `.empty-state`, `.lede`, `.muted`
+ * - Badges: `.badge` + `.badge-ok` | `.badge-warn` | `.badge-error` | `.badge-ocr` | `.badge-next`
+ * - Notices: `.notice` + `.notice-ok` | `.notice-error` | `.notice-busy`
+ * - Forms (flush input + button): `<label class="form-field-label">` and `.field-hint` above
+ *   `.form-row` containing `.field-grow` (`<input>` + `.field-error`) and `<button>` + `.run-busy-msg`
+ * - Section header + inline filter: `.section-toolbar` (`<h2>` + `<search><label class="toolbar-filter-label"><span>Filter</span><input type="search" data-filter="#id"></label></search>`)
+ * - Tables & row actions: `.table-wrap > table[data-sortable]`, `.table-tools`, `.inline-actions`, `.btn-link`, `.btn-compact`
+ */
+
+:root {
+  color-scheme: light;
+  accent-color: var(--brand-primary);
+
+  /* Pin 16px root scale across viewports (overrides Pico's 125%-131.25% desktop zoom while
+   * keeping 1rem inputs >= 16px on mobile) and tighten form control padding. */
+  --pico-font-size: 100%;
+  --pico-form-element-spacing-vertical: 0.48rem;
+  --pico-form-element-spacing-horizontal: 0.78rem;
+
+  /* Federal Navy & Ledger core palette (overridable in recipe/brand/brand.css) */
+  --brand-header-bg: #162e51;
+  --brand-header-fg: #f8f9fa;
+  --brand-header-muted: #c6d2e1;
+  --brand-accent: #005ea2;
+  --brand-primary: #005ea2;
+  --brand-primary-hover: #1a4480;
+  --brand-primary-inverse: #ffffff;
+
+  --brand-paper: #f0f2f5;
+  --brand-sheet: #ffffff;
+  --brand-surface-subtle: #f5f7fa;
+  --brand-thead-bg: #eef2f6;
+  --brand-row-hover: #f6f8fb;
+  --brand-footer-bg: #e6eaef;
+  --brand-footer-fg: #3d4551;
+  --brand-line: #d4dae2;
+  --brand-control-border: #71767a;
+  --brand-ink: #1b1b1b;
+  --brand-ink-soft: #565c65;
+
+  /* Subdued, high-contrast semantic status triads (>= 8.1:1 text contrast) */
+  --status-neutral-bg: #edeff1;
+  --status-neutral-fg: #2e3237;
+  --status-neutral-border: #b8bfc7;
+
+  --status-ok-bg: #ecf3ec;
+  --status-ok-fg: #1b4b23;
+  --status-ok-border: #8ab08e;
+  --status-ok-accent: #286834;
+
+  --status-warn-bg: #faf3d1;
+  --status-warn-fg: #654100;
+  --status-warn-border: #c99a2e;
+  --status-warn-accent: #b57c00;
+
+  --status-err-bg: #f9dede;
+  --status-err-fg: #6f1313;
+  --status-err-border: #cf7a7a;
+  --status-err-accent: #b50909;
+
+  --status-info-bg: #e7f2f5;
+  --status-info-fg: #0b4778;
+  --status-info-border: #7fb3c8;
+  --status-info-accent: #005ea2;
+
+  --status-ocr-bg: #eeeaf6;
+  --status-ocr-fg: #3e2a6d;
+  --status-ocr-border: #b3a5d4;
+}
+
+/* Match Pico's light-theme selector specificity (:root:not([data-theme=dark])) so
+ * unbranded pages inherit --brand-* tokens and recipe/brand/brand.css :root overrides win. */
+:root:not([data-theme="dark"]),
+[data-theme="light"] {
+  --pico-color: var(--brand-ink);
+  --pico-h1-color: var(--brand-ink);
+  --pico-h2-color: var(--brand-ink);
+  --pico-h3-color: #2e3237;
+  --pico-muted-color: var(--brand-ink-soft);
+  --pico-muted-border-color: var(--brand-line);
+  --pico-primary: var(--brand-primary);
+  --pico-primary-background: var(--brand-primary);
+  --pico-primary-border: var(--brand-primary);
+  --pico-primary-underline: color-mix(in srgb, var(--brand-primary) 45%, transparent);
+  --pico-primary-hover: var(--brand-primary-hover);
+  --pico-primary-hover-background: var(--brand-primary-hover);
+  --pico-primary-hover-border: var(--brand-primary-hover);
+  --pico-primary-focus: color-mix(in srgb, var(--brand-primary) 26%, transparent);
+  --pico-primary-inverse: var(--brand-primary-inverse);
+  --pico-text-selection-color: color-mix(in srgb, var(--brand-primary) 20%, transparent);
+  --pico-secondary: #4a5564;
+  --pico-secondary-background: #4a5564;
+  --pico-secondary-border: #4a5564;
+  --pico-secondary-hover: #38414e;
+  --pico-secondary-hover-background: #38414e;
+  --pico-secondary-hover-border: #38414e;
+  --pico-code-background-color: var(--brand-thead-bg);
+  --pico-code-color: #2e3237;
+  --pico-form-element-background-color: #ffffff;
+  --pico-form-element-border-color: var(--brand-control-border);
+  --pico-form-element-color: var(--brand-ink);
+  --pico-form-element-placeholder-color: #68707a;
+  --pico-card-border-color: var(--brand-line);
+}
+
+body {
+  margin: 0;
+  background: var(--brand-paper);
+}
+
+h1 {
+  --pico-font-size: 1.4rem;
+  --pico-line-height: 1.25;
+  --pico-typography-spacing-top: 1.4rem;
+}
+
+h2 {
+  --pico-font-size: 1.06rem;
+  --pico-line-height: 1.3;
+  --pico-typography-spacing-top: 1.25rem;
+  margin-bottom: 0.6rem;
+}
+
+h3 {
+  --pico-font-size: 0.96rem;
+  --pico-line-height: 1.35;
+  --pico-typography-spacing-top: 1rem;
+}
+
+h4 {
+  --pico-font-size: 0.88rem;
+  --pico-line-height: 1.35;
+  --pico-typography-spacing-top: 0.85rem;
+}
+
+article {
+  border: 1px solid var(--brand-line);
+  border-radius: 0.5rem;
+  padding: 1.05rem 1.2rem;
+  margin-bottom: 1.25rem;
+}
+
+article > :is(h2, h3):first-child {
+  margin-top: 0;
+  margin-bottom: 0.3rem;
+}
+
+article > form:last-child {
+  margin-bottom: 0;
+}
+
+.site-header {
+  background: var(--brand-header-bg);
+  color: var(--brand-header-fg);
+  padding: 1.05rem 0;
+  border-bottom: 3px solid var(--brand-accent);
+}
+
+.site-header .container {
+  display: flex;
+  align-items: center;
+}
+
+.site-header a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.site-header a:hover,
+.site-header a:focus {
+  color: inherit;
+  text-decoration: none;
+}
+
+.site-name {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.site-abbr {
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  font-size: 1.15rem;
+  line-height: 1.1;
+}
+
+.site-slogan {
+  font-size: 0.92rem;
+  line-height: 1.3;
+  color: var(--brand-header-muted);
+}
+
+main.container {
+  background: var(--brand-sheet);
+  border: 1px solid var(--brand-line);
+  border-radius: 0.6rem;
+  margin-top: 1.25rem;
+  margin-bottom: 1.25rem;
+  padding: 1.5rem 1.6rem 2.25rem;
+}
+
+main.container > h1 {
+  margin-bottom: 0.35rem;
+}
+
+.lede {
+  color: var(--brand-ink-soft);
+  margin-top: 0;
+  max-width: 42rem;
+}
+
+.kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr));
+  gap: 0.7rem;
+  margin: 0 0 1.25rem;
+}
+
+.kpi {
+  border: 1px solid var(--brand-line);
+  border-left: 4px solid var(--pico-primary, var(--brand-accent));
+  border-radius: 0.4rem;
+  padding: 0.62rem 0.85rem;
+  background: var(--brand-sheet);
+  font-size: 0.82rem;
+  color: var(--brand-ink-soft);
+}
+
+.kpi strong {
+  display: block;
+  font-size: 1.35rem;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.15;
+  color: var(--brand-ink);
+  margin-bottom: 0.1rem;
+}
+
+.badge {
+  display: inline-block;
+  padding: 0.12rem 0.45rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: 1.3;
+  white-space: nowrap;
+  background: var(--status-neutral-bg);
+  color: var(--status-neutral-fg);
+  border: 1px solid var(--status-neutral-border);
+}
+
+.muted {
+  color: var(--brand-ink-soft);
+}
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+.table-tools {
+  display: flex;
+  justify-content: flex-end;
+  margin: 0 0 0.75rem;
+}
+
+.table-tools label {
+  width: min(22rem, 100%);
+  margin: 0;
+}
+
+.table-tools input {
+  margin: 0;
+}
+
+table {
+  font-size: 0.9rem;
+  font-variant-numeric: tabular-nums;
+}
+
+td,
+th {
+  vertical-align: top;
+}
+
+thead th {
+  background: var(--brand-thead-bg);
+  font-size: 0.82rem;
+  font-weight: 600;
+  padding: 0.52rem 0.7rem;
+  border-bottom: 2px solid #b8c2ce;
+  white-space: nowrap;
+}
+
+tbody td,
+tbody th {
+  padding: 0.58rem 0.7rem;
+}
+
+table[data-sortable] thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--brand-thead-bg);
+  cursor: pointer;
+  user-select: none;
+  box-shadow: inset 0 -1px 0 #b8c2ce;
+}
+
+table[data-sortable] thead th[aria-sort="ascending"]::after {
+  content: " \2191";
+  font-size: 0.8em;
+}
+
+table[data-sortable] thead th[aria-sort="descending"]::after {
+  content: " \2193";
+  font-size: 0.8em;
+}
+
+tbody tr:hover td {
+  background: var(--brand-row-hover);
+}
+
+details {
+  border: 1px solid var(--brand-line);
+  border-radius: 0.4rem;
+  padding: 0.6rem 0.9rem;
+  margin: 0.6rem 0;
+  background: var(--brand-sheet);
+}
+
+details summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+blockquote {
+  margin: 0.35rem 0;
+  padding-left: 0.8rem;
+  border-left: 3px solid var(--brand-line);
+  font-size: 0.92rem;
+}
+
+.site-footer {
+  background: var(--brand-footer-bg);
+  border-top: 1px solid var(--brand-line);
+  padding: 1rem 0 1.5rem;
+  color: var(--brand-footer-fg);
+  font-size: 0.9rem;
+}
+
+.site-footer p {
+  margin: 0;
+}
+
+/* --------------------------------------------------------------------------
+ * Core Shell (`commissure serve`): Sticky Header, Status & Pipeline Drawers,
+ * and Centered Non-Sticky Footer.
+ *
+ * Standard body components available to all recipe templates:
+ *   Notices:  .notice, .notice-ok, .notice-error, .notice-busy
+ *   Badges:   .badge, .badge-ok, .badge-warn, .badge-error, .badge-next, .badge-ocr
+ *   Metrics:  .kpis > .kpi
+ *   Forms:    .form-row, .field-grow, .field-hint, .field-error
+ *   Actions:  .inline-actions, .btn-compact, .btn-link, .run-busy-msg
+ *   Tables:   .table-wrap, .table-tools, table[data-sortable], input[data-filter]
+ *   Empty:    .empty-state, .muted
+ * -------------------------------------------------------------------------- */
+
+.interface-state {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-header {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  width: 100%;
+  background: var(--brand-header-bg);
+  color: var(--brand-header-fg);
+  border-bottom: 3px solid var(--brand-accent);
+  box-shadow: 0 2px 10px rgb(22 46 81 / 0.14);
+}
+
+.app-header-inner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem 1.25rem;
+  padding: 0.65rem clamp(1rem, 2.5vw, 1.75rem);
+}
+
+.app-header-brand {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.app-brand-slot {
+  display: inline-flex;
+  align-items: center;
+  padding-inline-end: 0.85rem;
+  border-inline-end: 1px solid color-mix(in srgb, var(--brand-header-fg) 22%, transparent);
+}
+
+.app-back-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-bottom: 0.75rem;
+  font-size: 0.9rem;
+}
+
+.app-back-nav a {
+  padding: 0;
+  margin: 0;
+}
+
+.app-header .app-back-nav {
+  margin-bottom: 0;
+  padding-inline-end: 0.75rem;
+  border-inline-end: 1px solid color-mix(in srgb, var(--brand-header-fg) 22%, transparent);
+}
+
+.header-home-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  color: var(--brand-header-muted);
+  font-size: 0.85rem;
+  font-weight: 550;
+  line-height: 1.25;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: color 0.15s ease;
+}
+
+.header-home-link:hover,
+.header-home-link:focus-visible {
+  color: var(--brand-header-fg);
+  text-decoration: none;
+}
+
+.header-home-link:focus-visible {
+  outline: 2px solid #73b3e7;
+  outline-offset: 2px;
+  border-radius: 0.25rem;
+}
+
+.app-brand-slot a {
+  color: inherit;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.app-brand-slot a:hover,
+.app-brand-slot a:focus {
+  color: inherit;
+  text-decoration: none;
+}
+
+.app-brand-slot img {
+  max-height: 1.95rem;
+  width: auto;
+  display: block;
+}
+
+.app-brand-slot .site-abbr {
+  font-size: 1rem;
+}
+
+.app-brand-slot .site-slogan {
+  font-size: 0.78rem;
+  max-width: 18rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.app-title-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.app-header .app-title {
+  margin: 0;
+  font-size: 1.08rem;
+  font-weight: 650;
+  line-height: 1.25;
+  color: var(--brand-header-fg);
+}
+
+.app-header-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.15rem;
+  margin-inline-start: auto;
+}
+
+.header-busy-slot {
+  display: inline-flex;
+  align-items: center;
+}
+
+details.header-disclosure {
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  margin: 0;
+  background: transparent;
+}
+
+.header-info,
+.header-status,
+.header-pipeline,
+.header-versions {
+  position: relative;
+}
+
+details.header-disclosure > summary {
+  margin-bottom: 0;
+  list-style: none;
+  user-select: none;
+}
+
+details.header-disclosure > summary::-webkit-details-marker {
+  display: none;
+}
+
+details.header-disclosure > summary::after {
+  display: none;
+  content: none;
+  background-image: none;
+}
+
+/* Header tools are marks on the navy bar, not chips on top of it.
+   A filled circle behind a circular glyph (about, idle) read as a halo,
+   and attention painted that halo yellow.
+   Pico's `details summary:not([role])` (specificity 0,1,2) sets color to
+   --pico-color, the near-black page ink, and
+   `details summary:focus-visible:not([role])` (0,2,2) repaints it primary
+   blue. These selectors stay at 0,3,2 or higher so every glyph — summary
+   or link — uses the header foreground. The review control is an <a>,
+   which those Pico rules never matched, so it was the only light icon. */
+.app-header details.header-disclosure > summary.header-icon-btn,
+.app-header a.header-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  padding: 0;
+  border-radius: 0.25rem;
+  color: var(--brand-header-fg);
+  background: transparent;
+  border: 1px solid transparent;
+  box-shadow: none;
+  transition: background-color 0.15s ease;
+}
+
+.app-header details.header-disclosure > summary.header-icon-btn svg,
+.app-header a.header-icon-btn svg {
+  display: block;
+}
+
+.app-header details.header-disclosure > summary.header-icon-btn:hover,
+.app-header a.header-icon-btn:hover,
+.app-header details.header-disclosure > summary.header-icon-btn:active,
+.app-header a.header-icon-btn:active {
+  color: var(--brand-header-fg);
+  background: color-mix(in srgb, var(--brand-header-fg) 10%, transparent);
+}
+
+/* Open and current are a short rule under the mark, in the mark's own color.
+   A filled plate behind the glyph was the circle problem again. */
+.app-header a.header-icon-btn[aria-current="page"],
+.app-header details.header-disclosure[open] > summary.header-icon-btn {
+  color: var(--brand-header-fg);
+  background: transparent;
+  box-shadow: inset 0 -2px 0 currentColor;
+}
+
+.app-header details.header-disclosure > summary.header-icon-btn:focus-visible,
+.app-header a.header-icon-btn:focus-visible {
+  outline: 2px solid #73b3e7;
+  outline-offset: 2px;
+  color: var(--brand-header-fg);
+}
+
+.app-header a.header-icon-btn {
+  text-decoration: none;
+}
+
+/* Attention is the glyph. A gold ring around the button was a second, larger circle. */
+.app-header details.header-disclosure > summary.header-icon-attention,
+.app-header details.header-disclosure > summary.header-icon-attention:hover,
+.app-header details.header-disclosure[open] > summary.header-icon-attention,
+.app-header details.header-disclosure > summary.header-icon-attention:active {
+  color: #f5b700;
+  border-color: transparent;
+}
+
+.app-header details.header-disclosure > summary.header-icon-attention:hover,
+.app-header details.header-disclosure > summary.header-icon-attention:active {
+  background: color-mix(in srgb, #f5b700 14%, transparent);
+}
+
+.app-header details.header-disclosure > summary.header-icon-busy,
+.app-header details.header-disclosure > summary.header-icon-busy:hover,
+.app-header details.header-disclosure[open] > summary.header-icon-busy,
+.app-header details.header-disclosure > summary.header-icon-busy:active {
+  background: transparent;
+  border-color: transparent;
+  color: var(--brand-header-fg);
+}
+
+.app-header details.header-disclosure > summary.header-icon-busy:hover,
+.app-header details.header-disclosure > summary.header-icon-busy:active {
+  background: color-mix(in srgb, #f5b700 14%, transparent);
+}
+
+summary.header-icon-busy .busy-dot {
+  width: 0.62rem;
+  height: 0.62rem;
+}
+
+/* Same Pico summary-color override as the icon tools: 0,3,2 or higher. */
+.app-header details.header-disclosure > summary.header-pill-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.42rem;
+  height: 1.75rem;
+  padding: 0 0.65rem;
+  border-radius: 0.25rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  white-space: nowrap;
+  color: var(--brand-header-fg);
+  background: transparent;
+  border: 1px solid color-mix(in srgb, var(--brand-header-fg) 28%, transparent);
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.app-header details.header-disclosure > summary.header-pill-btn:hover,
+.app-header details.header-disclosure[open] > summary.header-pill-btn,
+.app-header details.header-disclosure > summary.header-pill-btn:active {
+  color: var(--brand-header-fg);
+  background: color-mix(in srgb, var(--brand-header-fg) 14%, transparent);
+  border-color: color-mix(in srgb, var(--brand-header-fg) 42%, transparent);
+}
+
+.app-header details.header-disclosure > summary.header-pill-btn:focus-visible {
+  outline: 2px solid #73b3e7;
+  outline-offset: 2px;
+  color: var(--brand-header-fg);
+}
+
+.app-header details.header-disclosure > summary.header-pill-attention,
+.app-header details.header-disclosure > summary.header-pill-attention:hover,
+.app-header details.header-disclosure[open] > summary.header-pill-attention,
+.app-header details.header-disclosure > summary.header-pill-attention:active {
+  color: #f5b700;
+  border-color: color-mix(in srgb, #f5b700 55%, transparent);
+}
+
+.app-header details.header-disclosure > summary.header-pill-attention:hover,
+.app-header details.header-disclosure[open] > summary.header-pill-attention,
+.app-header details.header-disclosure > summary.header-pill-attention:active {
+  background: color-mix(in srgb, #f5b700 16%, transparent);
+}
+
+details.header-disclosure > summary.header-pill-btn::after {
+  display: inline-block;
+  content: "";
+  width: 0.36rem;
+  height: 0.36rem;
+  border-inline-end: 1.6px solid currentColor;
+  border-block-end: 1.6px solid currentColor;
+  background-image: none;
+  transform: translateY(-0.08rem) rotate(45deg);
+  transition: transform 0.15s ease;
+}
+
+details.header-disclosure[open] > summary.header-pill-btn::after {
+  transform: translateY(0.08rem) rotate(-135deg);
+}
+
+.header-versions-card {
+  width: min(21rem, calc(100vw - 2rem));
+}
+
+.version-list {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  max-height: 15rem;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.22rem;
+}
+
+.version-item {
+  list-style: none;
+  margin: 0;
+}
+
+.version-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.35rem 0.5rem;
+  border-radius: 0.35rem;
+  font-size: 0.82rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--brand-ink);
+  text-decoration: none;
+}
+
+a.version-row:hover,
+a.version-row:focus-visible {
+  background: var(--brand-row-hover);
+  color: var(--brand-ink);
+  text-decoration: none;
+}
+
+.version-row.is-current {
+  background: var(--brand-thead-bg);
+  font-weight: 600;
+}
+
+.version-meta {
+  color: var(--brand-ink-soft);
+  font-size: 0.76rem;
+  font-weight: 400;
+}
+
+.busy-dot {
+  display: inline-block;
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 999px;
+  background: #f5b700;
+  flex-shrink: 0;
+  animation: busy-dot-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes busy-dot-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.header-busy-rail {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -3px;
+  height: 3px;
+  background: rgb(22 46 81 / 0.45);
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.header-busy-rail-fill {
+  display: block;
+  height: 100%;
+  background: #f5b700;
+  transition: inline-size 0.35s ease;
+}
+
+.header-busy-rail-fill.is-indeterminate {
+  inline-size: 28%;
+  animation: header-rail-indeterminate 1.5s infinite linear;
+}
+
+@keyframes header-rail-indeterminate {
+  from {
+    translate: -100%;
+  }
+  to {
+    translate: 360%;
+  }
+}
+
+.header-popover-card {
+  position: absolute;
+  top: calc(100% + 0.55rem);
+  z-index: 40;
+  width: min(24rem, calc(100vw - 2rem));
+  background: var(--brand-sheet);
+  color: var(--pico-color, var(--brand-ink));
+  border: 1px solid var(--brand-line);
+  border-radius: 0.5rem;
+  padding: 0.85rem 1rem;
+  box-shadow: 0 12px 28px rgb(22 46 81 / 0.16);
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
+.header-popover-card p {
+  margin: 0;
+  color: inherit;
+}
+
+.header-popover-left {
+  inset-inline-start: 0;
+}
+
+.header-popover-right {
+  inset-inline-end: 0;
+}
+
+.header-status-card {
+  width: min(26rem, calc(100vw - 2rem));
+}
+
+.status-card-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.92rem;
+  line-height: 1.35;
+  color: var(--brand-ink);
+}
+
+.status-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0.5rem 0 0.55rem;
+  font-size: 0.84rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--brand-ink-soft);
+}
+
+.status-card-counts {
+  font-weight: 600;
+  color: var(--brand-ink);
+}
+
+.status-card-note {
+  margin: 0.55rem 0 0 !important;
+  font-size: 0.82rem;
+  line-height: 1.4;
+  color: var(--brand-ink-soft) !important;
+}
+
+.header-drawer-panel {
+  position: absolute;
+  top: calc(100% + 0.55rem);
+  inset-inline-end: 0;
+  z-index: 40;
+  width: min(56rem, calc(100vw - 2rem));
+  max-height: calc(100dvh - 5rem);
+  overflow: auto;
+  background: var(--brand-sheet);
+  color: var(--pico-color, var(--brand-ink));
+  border: 1px solid var(--brand-line);
+  border-radius: 0.5rem;
+  box-shadow: 0 12px 28px rgb(22 46 81 / 0.16);
+  padding: 0.9rem 1rem 1.15rem;
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
+.header-drawer-panel table {
+  margin-bottom: 0;
+}
+
+main.app-main {
+  flex: 0 1 auto;
+  width: 100%;
+}
+
+.app-footer {
+  margin-top: auto;
+  text-align: center;
+}
+
+.app-footer-inner {
+  max-width: 52rem;
+  margin-inline: auto;
+}
+
+.app-footer p + p {
+  margin-top: 0.3rem;
+}
+
+@media (max-width: 640px) {
+  .header-info,
+  .header-status,
+  .header-pipeline,
+  .header-versions {
+    position: static;
+  }
+
+  .header-popover-card,
+  .header-drawer-panel {
+    inset-inline-start: 0.75rem;
+    inset-inline-end: 0.75rem;
+    width: auto;
+  }
+}
+
+.offline-index-nav {
+  margin: 0 0 0.85rem;
+  font-size: 0.86rem;
+}
+
+.offline-index-nav p {
+  margin: 0;
+}
+
+[data-commissure-served="true"] .offline-index-nav {
+  display: none;
+}
+
+.snapshot-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+}
+
+.split-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr));
+  gap: 1.35rem;
+  margin-bottom: 1.5rem;
+}
+
+/* Standard Core Body Components */
+.notice {
+  border-radius: 0.45rem;
+  border: 1px solid var(--brand-line);
+  border-left-width: 4px;
+  padding: 0.75rem 1rem;
+  margin: 0 0 1.25rem;
+  font-size: 0.95rem;
+}
+
+.notice-ok {
+  background: var(--status-ok-bg);
+  border-color: var(--status-ok-border);
+  border-left-color: var(--status-ok-accent);
+  color: var(--status-ok-fg);
+}
+
+.notice-error {
+  background: var(--status-err-bg);
+  border-color: var(--status-err-border);
+  border-left-color: var(--status-err-accent);
+  color: var(--status-err-fg);
+}
+
+.notice-busy {
+  background: var(--status-warn-bg);
+  border-color: var(--status-warn-border);
+  border-left-color: var(--status-warn-accent);
+  color: var(--status-warn-fg);
+}
+
+progress.busy-progress {
+  appearance: none;
+  border: 0 solid;
+  overflow: clip;
+  container-type: inline-size;
+  display: block;
+  inline-size: 100%;
+  block-size: 0.48rem;
+  margin: 0;
+  --progress-bar-radius: 999px;
+  --progress-bar-track: #dce2ea;
+  --progress-bar-fill: var(--status-warn-accent);
+  --progress-bar-indeterminate-size: 28%;
+  --progress-bar-indeterminate-animation-duration: 1.5s;
+  border-radius: var(--progress-bar-radius);
+  background: var(--progress-bar-track);
+  box-shadow: inset 0 1px 2px rgb(22 46 81 / 0.12);
+}
+
+progress.busy-progress:indeterminate {
+  --progress-bar-animation: var(
+    --progress-bar-indeterminate-animation,
+    busy-progress-indeterminate var(--progress-bar-indeterminate-animation-duration) infinite linear
+  );
+}
+
+progress.busy-progress:dir(rtl) {
+  --progress-bar-indeterminate-animation: busy-progress-indeterminate
+    var(--progress-bar-indeterminate-animation-duration) infinite linear reverse;
+}
+
+progress.busy-progress::-webkit-progress-bar {
+  background: transparent;
+}
+
+progress.busy-progress::-webkit-progress-value {
+  background: var(--progress-bar-fill);
+  border-radius: var(--progress-bar-radius);
+  transition: inline-size 0.3s;
+  animation: var(--progress-bar-animation, revert-rule);
+}
+
+progress.busy-progress::-moz-progress-bar {
+  background: var(--progress-bar-fill);
+  border-radius: var(--progress-bar-radius);
+  transition: inline-size 0.3s;
+  animation: var(--progress-bar-animation, revert-rule);
+}
+
+@keyframes busy-progress-indeterminate {
+  from,
+  to {
+    inline-size: var(--progress-bar-indeterminate-size);
+    margin-right: auto;
+  }
+  from {
+    translate: -100%;
+  }
+  to {
+    translate: 100cqi;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .busy-dot,
+  .header-busy-rail-fill.is-indeterminate {
+    animation: none;
+  }
+
+  progress.busy-progress {
+    --progress-bar-indeterminate-animation-duration: 10s;
+  }
+}
+
+.interface-state[data-busy="true"] form {
+  opacity: 0.58;
+}
+
+.interface-state[data-busy="true"] form :is(button, input, select, textarea):disabled {
+  cursor: not-allowed;
+}
+
+.badge-ok {
+  background: var(--status-ok-bg);
+  color: var(--status-ok-fg);
+  border-color: var(--status-ok-border);
+}
+
+.badge-warn {
+  background: var(--status-warn-bg);
+  color: var(--status-warn-fg);
+  border-color: var(--status-warn-border);
+}
+
+.badge-error {
+  background: var(--status-err-bg);
+  color: var(--status-err-fg);
+  border-color: var(--status-err-border);
+}
+
+.badge-next {
+  background: var(--status-info-bg);
+  color: var(--status-info-fg);
+  border-color: var(--status-info-border);
+}
+
+.badge-ocr {
+  background: var(--status-ocr-bg);
+  color: var(--status-ocr-fg);
+  border-color: var(--status-ocr-border);
+}
+
+.form-field-label {
+  display: block;
+  font-size: 0.88rem;
+  font-weight: 600;
+  margin-bottom: 0.15rem;
+  color: var(--brand-ink);
+}
+
+.field-hint {
+  display: block;
+  color: var(--brand-ink-soft);
+  font-size: 0.82rem;
+  line-height: 1.4;
+  margin-bottom: 0.5rem;
+}
+
+.field-error {
+  display: none;
+  color: var(--status-err-accent);
+  font-size: 0.85rem;
+  margin-top: 0.25rem;
+  margin-bottom: 0;
+}
+
+input:user-invalid,
+input.user-invalid-fallback {
+  border-color: var(--status-err-accent);
+  background-color: var(--status-err-bg);
+}
+
+input:user-invalid + .field-error,
+input.user-invalid-fallback + .field-error {
+  display: block;
+}
+
+.form-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  align-items: flex-start;
+}
+
+.form-row .field-grow {
+  flex: 1 1 16rem;
+}
+
+.form-row .field-grow input {
+  margin-bottom: 0;
+}
+
+.form-row button {
+  width: auto;
+  margin-bottom: 0;
+  white-space: nowrap;
+}
+
+.section-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem 1rem;
+  margin: 0 0 0.65rem;
+}
+
+.section-toolbar > :is(h2, h3) {
+  margin: 0;
+}
+
+.section-toolbar search {
+  margin: 0;
+  width: min(17.5rem, 100%);
+}
+
+.toolbar-filter-label {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0;
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--brand-ink-soft);
+}
+
+.section-toolbar input[type="search"] {
+  --pico-border-radius: 0.375rem;
+  --pico-form-element-spacing-vertical: 0.28rem;
+  --pico-form-element-spacing-horizontal: 0.6rem;
+  height: auto;
+  margin: 0;
+  font-size: 1rem;
+  background-size: 0.85rem auto;
+  padding-inline-start: 1.95rem;
+}
+
+@media (min-width: 640px) {
+  .section-toolbar input[type="search"] {
+    font-size: 0.84rem;
+  }
+}
+
+.inline-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.inline-actions form {
+  margin: 0;
+}
+
+.inline-actions button,
+.btn-compact {
+  width: auto;
+  padding: 0.3rem 0.65rem;
+  font-size: 0.85rem;
+  margin: 0;
+}
+
+.btn-link {
+  display: inline-block;
+  padding: 0.3rem 0.65rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  line-height: 1.4;
+  border-radius: var(--pico-border-radius, 0.25rem);
+  background: var(--pico-primary-background, var(--brand-accent));
+  color: var(--pico-primary-inverse, #fff);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.btn-link:hover {
+  opacity: 0.92;
+  color: var(--pico-primary-inverse, #fff);
+  text-decoration: none;
+}
+
+.run-busy-msg {
+  font-size: 0.88rem;
+  color: var(--brand-ink-soft);
+  margin-left: 0.5rem;
+}
+
+.empty-state {
+  border: 2px dashed var(--brand-line);
+  border-radius: 0.5rem;
+  padding: 1.5rem 1.25rem;
+  text-align: center;
+  color: var(--brand-ink-soft);
+  margin: 1rem 0 1.5rem;
+}
+
+.empty-state p {
+  margin-bottom: 0;
+}
+
+.pipeline-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 0 0 0.85rem;
+}
+
+.pipeline-toolbar form {
+  margin: 0;
+}
+
+.pipeline-toolbar p {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+@media (forced-colors: active) {
+  .busy-dot,
+  .header-busy-rail-fill {
+    background: Highlight;
+  }
+
+  .header-popover-card,
+  .header-drawer-panel {
+    border-color: CanvasText;
+  }
+
+  /* Resting tools use a transparent border so the navy bar stays flat.
+     That declaration out-specifies a plain `summary.header-icon-btn` rule,
+     so high-contrast mode has to say ButtonText louder or the control
+     disappears into the header. */
+  .app-header details.header-disclosure > summary.header-icon-btn,
+  .app-header a.header-icon-btn,
+  .app-header details.header-disclosure > summary.header-pill-btn {
+    border-color: ButtonText !important;
+  }
+}
+
+@media print {
+  body {
+    background: #fff;
+  }
+
+  .site-header,
+  .app-header {
+    position: static;
+    print-color-adjust: exact;
+  }
+
+  main.container {
+    border: 0;
+    margin: 0;
+    padding: 0;
+  }
+
+  .table-tools,
+  .section-toolbar search {
+    display: none;
+  }
+
+  table[data-sortable] thead th {
+    position: static;
+  }
+
+  details > *:not(summary) {
+    display: block !important;
+  }
+}

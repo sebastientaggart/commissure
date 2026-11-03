@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="153" height="20" viewBox="0 0 153 20" role="img" aria-label="egress: offline by default">
+  <title>egress: offline by default</title>
+  <style>
+    :root { --l:#24292f; --r:#2b8a3e; }
+    @media (prefers-color-scheme: dark) { :root { --l:#30363d; --r:#2b8a3e; } }
+  </style>
+  <linearGradient id="s" x2="0" y2="100%">
+    <stop offset="0" stop-color="#bbb" stop-opacity=".1"/>
+    <stop offset="1" stop-opacity=".1"/>
+  </linearGradient>
+  <clipPath id="c">
+    <rect width="153" height="20" rx="3" fill="#fff"/>
+  </clipPath>
+  <g clip-path="url(#c)">
+    <rect width="48" height="20" fill="var(--l)"/>
+    <rect x="48" width="105" height="20" fill="var(--r)"/>
+    <rect width="153" height="20" fill="url(#s)"/>
+  </g>
+  <g fill="#fff" text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" text-rendering="geometricPrecision" font-size="110">
+    <text aria-hidden="true" x="245" y="150" fill="#010101" fill-opacity=".3" transform="scale(.1)" textLength="361">egress</text>
+    <text x="245" y="140" transform="scale(.1)" fill="#fff" textLength="361">egress</text>
+    <text aria-hidden="true" x="1000" y="150" fill="#010101" fill-opacity=".3" transform="scale(.1)" textLength="933">offline by default</text>
+    <text x="1000" y="140" transform="scale(.1)" fill="#fff" textLength="933">offline by default</text>
+  </g>
+</svg>

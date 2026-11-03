@@ -1,0 +1,56 @@
+{
+  "text_hash": "1d0cd3df96dbe6b0ecc5f95366c9105f18c94a199a173f11ba5f300df44f94b2",
+  "outcome": "warning",
+  "reason_code": "full_page_image_under_text",
+  "diagnostics": [
+    {
+      "code": "full_page_image_under_text",
+      "detail": {
+        "pages": [
+          4
+        ]
+      }
+    }
+  ],
+  "structure": {
+    "blocks": [
+      {
+        "kind": "page",
+        "start": 0,
+        "end": 3460,
+        "page": 1,
+        "status": "readable"
+      },
+      {
+        "kind": "page",
+        "start": 3462,
+        "end": 3470,
+        "page": 2,
+        "status": "readable"
+      },
+      {
+        "kind": "page",
+        "start": 3472,
+        "end": 3543,
+        "page": 3,
+        "status": "readable"
+      },
+      {
+        "kind": "page",
+        "start": 3545,
+        "end": 6692,
+        "page": 4,
+        "status": "readable",
+        "flags": [
+          "full_page_image_under_text"
+        ]
+      }
+    ],
+    "tables": [],
+    "metadata": {
+      "pages": 4,
+      "info": {},
+      "blank_pages": []
+    }
+  }
+}

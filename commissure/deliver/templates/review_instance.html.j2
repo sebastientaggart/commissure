@@ -1,0 +1,80 @@
+{#- One instance beside its original (commissure/review_page.py). Every printed value passes `_inert`. -#}
+<style>
+  .review-layout { display: grid; grid-template-columns: minmax(22rem, 2fr) 3fr; gap: 1.25rem; align-items: start; }
+  @media (max-width: 960px) { .review-layout { grid-template-columns: 1fr; } }
+  .review-value { white-space: pre-wrap; max-height: 18rem; overflow: auto; font-size: 0.85rem; }
+  .review-context { font-size: 0.92rem; line-height: 1.5; }
+  .review-context mark { background: var(--status-warn-bg); color: var(--status-warn-fg); padding: 0 0.1rem; }
+  .review-viewer { position: sticky; top: 1rem; }
+  .review-viewer iframe { width: 100%; height: 78vh; border: 1px solid var(--brand-line); background: var(--brand-sheet); }
+  .review-answers { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+  .review-answers label { display: inline-flex; gap: 0.35rem; align-items: center; margin: 0; }
+  .review-sources li { margin-bottom: 0.25rem; }
+</style>
+
+<nav class="app-back-nav">
+  <a href="/review">&larr; All samples</a>{% if d.sample_id %} &middot; <a href="/review/sample/{{ d.sample_id }}">Sample {{ d.sample_id }}</a>{% endif %}
+</nav>
+
+<div class="review-layout">
+  <div>
+    <article>
+      <p class="muted">{% if d.sample_id %}Instance {{ d.position }} of {{ d.sample_n }}{% else %}Spot check (not counted in any rate){% endif %} &middot; <code>{{ d.check_id }}</code> &middot; <code>{{ d.subject_key }}</code> <code>{{ d.pointer if d.pointer is not none else "page " ~ d.page }}</code></p>
+      <h2>{{ d.question }}</h2>
+      <pre class="review-value">{{ d.value | pretty }}</pre>
+
+      {% for e in d.earlier_verdicts %}
+      <p class="notice"><strong>Earlier:</strong> {{ e.answer }} by {{ e.reviewer }} on {{ e.created_at }}{% if e.note %}: {{ e.note }}{% endif %}. Shown only; it does not count here.</p>
+      {% endfor %}
+
+      {% for e in d.evidence %}
+      <div class="review-context">
+        <p class="muted">{{ e.locator | filename }}{% if e.page %}, p. {{ e.page }}{% endif %}{% if e.via_ocr %} <span class="badge badge-ocr">ocr {{ "%.1f" % e.confidence if e.confidence is not none else "" }}</span>{% endif %}{% if e.copied %} <span class="muted">(copied from an upstream record)</span>{% endif %}</p>
+        {% if e.span_text is not none %}
+        <p>&hellip;{{ e.context_before }}<mark>{{ e.span_text }}</mark>{{ e.context_after }}&hellip;</p>
+        {% else %}
+        <p class="muted">Points at the item as a whole: no exact span. Search the original for it.</p>
+        {% endif %}
+      </div>
+      {% endfor %}
+
+      {% if d.verdict %}
+      <p class="notice notice-ok">Current verdict: <strong>{{ d.verdict.answer }}</strong> by {{ d.verdict.reviewer }}{% if d.verdict.note %}: {{ d.verdict.note }}{% endif %}. Recording again replaces it (the latest counts).</p>
+      {% endif %}
+
+      <form method="post" action="/review/record">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <input type="hidden" name="instance_id" value="{{ d.instance_id }}">
+        <fieldset class="review-answers">
+          <legend>Answer</legend>
+          <label><input type="radio" name="answer" value="correct" required> Correct</label>
+          <label><input type="radio" name="answer" value="wrong"> Wrong</label>
+          <label><input type="radio" name="answer" value="unclear"> Unclear</label>
+        </fieldset>
+        <label>Note <textarea name="note" rows="2" placeholder="Why, in a sentence (optional)"></textarea></label>
+        <div class="form-row">
+          <label>Reviewer <input type="text" name="reviewer" value="{{ reviewer }}" required></label>
+          <button type="submit">Record{% if d.sample_id %} and next{% endif %}</button>
+        </div>
+      </form>
+    </article>
+  </div>
+
+  <aside class="review-viewer">
+    {% if viewers %}
+    <ul class="review-sources">
+      {% for v in viewers %}
+      <li><a href="{{ v.url }}" {% if v.inline %}target="review-original"{% endif %}>{{ v.locator | filename }}{% if v.page %}, p. {{ v.page }}{% endif %}{% if v.view %} ({{ v.view }}){% endif %}</a> <span class="muted">{{ v.why }}{% if not v.inline %}, download{% endif %}</span></li>
+      {% endfor %}
+    </ul>
+    {% set shown = viewers | selectattr("inline") | first %}
+    {% if shown %}
+    <iframe name="review-original" src="{{ shown.url }}" title="Original: {{ shown.locator | filename }}"></iframe>
+    {% else %}
+    <p class="muted">None of these originals can be shown in the browser; download them from the links above.</p>
+    {% endif %}
+    {% else %}
+    <p class="muted">No original is linked to this subject.</p>
+    {% endif %}
+  </aside>
+</div>

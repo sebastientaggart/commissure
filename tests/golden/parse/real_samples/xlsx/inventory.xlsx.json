@@ -1,0 +1,100 @@
+{
+  "text_hash": "3d8a1b989012010d2ef954bc4ba140017cda2949cb9dc3a385dd0d026aee1240",
+  "outcome": "valid",
+  "reason_code": null,
+  "diagnostics": [],
+  "structure": {
+    "blocks": [
+      {
+        "kind": "sheet",
+        "start": 0,
+        "end": 243,
+        "name": "Field Descriptions",
+        "table": 0,
+        "status": "readable"
+      },
+      {
+        "kind": "sheet",
+        "start": 245,
+        "end": 442,
+        "name": "Inventory",
+        "table": 1,
+        "status": "readable"
+      }
+    ],
+    "tables": [
+      {
+        "sheet": "Field Descriptions",
+        "rows": [
+          [
+            "Outcome Measure Inventory: Field Descriptions",
+            null
+          ],
+          [
+            "Field Name",
+            "Definition"
+          ],
+          [
+            "Measure ID",
+            "Unique identifier assigned to the instrument."
+          ],
+          [
+            "Domain",
+            "Primary operational domain assessed by the measure."
+          ],
+          [
+            "Validated",
+            "Whether the instrument has completed validation."
+          ]
+        ]
+      },
+      {
+        "sheet": "Inventory",
+        "rows": [
+          [
+            "Measure ID",
+            "Instrument Name",
+            "Domain",
+            "Validated",
+            "Notes"
+          ],
+          [
+            "M-101",
+            "Intake Completeness Index",
+            "Intake",
+            "Yes",
+            null
+          ],
+          [
+            "M-102",
+            "Turnaround Interval Tracker",
+            "Processing",
+            "Yes",
+            "Core metric"
+          ],
+          [
+            "M-103",
+            "Reviewer Agreement Scale",
+            "Quality",
+            "No",
+            null
+          ]
+        ]
+      }
+    ],
+    "metadata": {
+      "sheets": [
+        {
+          "name": "Field Descriptions",
+          "state": "visible",
+          "rows": 5
+        },
+        {
+          "name": "Inventory",
+          "state": "visible",
+          "rows": 4
+        }
+      ]
+    }
+  }
+}

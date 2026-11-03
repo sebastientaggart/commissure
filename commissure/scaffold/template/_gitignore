@@ -1,0 +1,35 @@
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+
+# Local client data. intake/README.md stays so the layout is documented.
+# A solution that moves its corpus through git removes workspace/, state.db,
+# and intake/*. SQLite side files and the lockfile are never tracked.
+workspace/
+state.db
+state.db-wal
+state.db-shm
+state.db-journal
+workspace.lock
+intake/*
+!intake/README.md
+
+# Secrets stay local.
+.env
+.env.*
+!.env.example
+/secrets/
+
+# OS and editor noise. Office lock files match ingest DEFAULT_IGNORE.
+.DS_Store
+._*
+Thumbs.db
+desktop.ini
+~$*
+.~lock.*#
+
+# Local work plans (ephemeral agent scratchpad).
+docs/plans/
+docs/plan-*.md

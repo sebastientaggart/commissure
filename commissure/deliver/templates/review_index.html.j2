@@ -1,0 +1,96 @@
+{#- Review page index (commissure/review_page.py). Every printed value passes `_inert`. -#}
+<style>
+  .review-note { color: var(--brand-ink-soft); font-size: 0.9rem; }
+  .review-draw .form-row { gap: 0.6rem; align-items: end; flex-wrap: wrap; }
+  .review-draw select { min-width: 18rem; }
+  .review-draw input[type="number"] { width: 7rem; }
+</style>
+
+{% if not ready %}
+<article class="empty-state">
+  <h2>Nothing to review yet</h2>
+  <p>This workspace has no current-schema database. Run a stage once (for example <code>commissure run --step parse</code>), then come back.</p>
+</article>
+{% else %}
+
+<article>
+  <h2>Samples</h2>
+  {% if samples %}
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th scope="col">#</th>
+          <th scope="col">Check</th>
+          <th scope="col">Drawn</th>
+          <th scope="col">Judged</th>
+          <th scope="col">Wrong</th>
+          <th scope="col">Unclear</th>
+          <th scope="col">Error rate</th>
+          <th scope="col">95% interval</th>
+          <th scope="col"></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in samples %}
+        <tr>
+          <td><a href="/review/sample/{{ s.id }}">{{ s.id }}</a></td>
+          <td><code>{{ s.check_id }}</code><br><span class="muted">{{ s.question }}</span></td>
+          <td>{{ s.n }} of {{ s.population }}{% if s.census %} (all){% endif %}<br><span class="muted">run {{ s.snapshot_run_id or "-" }}, seed {{ s.seed }}, {{ s.reviewer }}</span></td>
+          <td>{{ s.correct + s.wrong + s.unclear }} / {{ s.n }}</td>
+          <td>{{ s.wrong }}</td>
+          <td>{{ s.unclear }}</td>
+          <td>{{ s.rate | pct }}</td>
+          <td>{% if s.interval_95 %}{{ s.interval_95[0] | pct }} to {{ s.interval_95[1] | pct }}{% else %}-{% endif %}</td>
+          <td>{% if s.next_instance %}<a href="/review/instance/{{ s.next_instance }}">Continue</a>{% else %}<span class="badge badge-ok">done</span>{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <p class="review-note">The error rate is wrong / (correct + wrong) for one random sample; unclear and pending answers are left out of it. The interval is a Wilson 95% interval: with 0 wrong in 30, the true rate is below 11.3%.</p>
+  {% else %}
+  <p class="muted">No samples drawn yet.</p>
+  {% endif %}
+</article>
+
+<article class="review-draw">
+  <h2>Draw a sample</h2>
+  <form method="post" action="/review/sample">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <div class="form-row">
+      <label>Check
+        <select name="check" required>
+          {% for c in checks %}
+          <option value="{{ c.id }}"{% if not c.population %} disabled{% endif %}>{{ c.id }} ({{ c.population if c.population is not none else "unavailable" }})</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>Instances <input type="number" name="n" min="1" value="{{ default_n }}" required></label>
+      <label>Seed <input type="number" name="seed" min="1" placeholder="random"></label>
+      <label>Reviewer <input type="text" name="reviewer" value="{{ reviewer }}" required></label>
+      <button type="submit">Draw</button>
+    </div>
+  </form>
+  {% for c in checks if c.unavailable %}
+  <p class="review-note"><code>{{ c.id }}</code>: {{ c.unavailable }}</p>
+  {% endfor %}
+  <p class="review-note">A sample is drawn at random from the stage's current records and recorded with its seed, so it can be redrawn exactly. Spot checks (<code>commissure review spot</code>) are reported below and never count toward a rate.</p>
+</article>
+
+{% if spot_checks %}
+<article>
+  <h2>Spot checks (not rated)</h2>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th scope="col">Check</th><th scope="col">Correct</th><th scope="col">Wrong</th><th scope="col">Unclear</th></tr></thead>
+      <tbody>
+        {% for s in spot_checks %}
+        <tr><td><code>{{ s.check_id }}</code></td><td>{{ s.correct }}</td><td>{{ s.wrong }}</td><td>{{ s.unclear }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</article>
+{% endif %}
+{% endif %}

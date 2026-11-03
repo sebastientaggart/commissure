@@ -1,0 +1,65 @@
+{
+  "text_hash": "b33ab2c6fb019575252974b849f970dc4acb7e427c62c91a18cec57793f05a2b",
+  "outcome": "warning",
+  "reason_code": "unreadable_pages",
+  "diagnostics": [
+    {
+      "code": "unreadable_pages",
+      "detail": {
+        "pages": [
+          2,
+          3
+        ],
+        "reasons": {
+          "2": [
+            "undecodable_glyphs",
+            "font_without_unicode_map"
+          ],
+          "3": [
+            "undecodable_glyphs",
+            "font_without_unicode_map"
+          ]
+        }
+      }
+    }
+  ],
+  "structure": {
+    "blocks": [
+      {
+        "kind": "page",
+        "start": 0,
+        "end": 42,
+        "page": 1,
+        "status": "readable"
+      },
+      {
+        "kind": "page",
+        "start": 42,
+        "end": 42,
+        "page": 2,
+        "status": "unreadable",
+        "reasons": [
+          "undecodable_glyphs",
+          "font_without_unicode_map"
+        ]
+      },
+      {
+        "kind": "page",
+        "start": 42,
+        "end": 42,
+        "page": 3,
+        "status": "unreadable",
+        "reasons": [
+          "undecodable_glyphs",
+          "font_without_unicode_map"
+        ]
+      }
+    ],
+    "tables": [],
+    "metadata": {
+      "pages": 3,
+      "info": {},
+      "blank_pages": []
+    }
+  }
+}

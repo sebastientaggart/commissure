@@ -1,0 +1,104 @@
+{
+  "text_hash": "3211bec00d38b4a4f77e11ed5bdfe515920b1a00255d15093be324036097a00e",
+  "outcome": "warning",
+  "reason_code": "full_page_image_under_text,unreadable_pages",
+  "diagnostics": [
+    {
+      "code": "unreadable_pages",
+      "detail": {
+        "pages": [
+          2,
+          3,
+          6
+        ],
+        "reasons": {
+          "2": [
+            "image_dominant"
+          ],
+          "3": [
+            "undecodable_glyphs",
+            "font_without_unicode_map"
+          ],
+          "6": [
+            "no_text_layer"
+          ]
+        }
+      }
+    },
+    {
+      "code": "full_page_image_under_text",
+      "detail": {
+        "pages": [
+          4
+        ]
+      }
+    }
+  ],
+  "structure": {
+    "blocks": [
+      {
+        "kind": "page",
+        "start": 0,
+        "end": 2356,
+        "page": 1,
+        "status": "readable"
+      },
+      {
+        "kind": "page",
+        "start": 2356,
+        "end": 2356,
+        "page": 2,
+        "status": "unreadable",
+        "reasons": [
+          "image_dominant"
+        ]
+      },
+      {
+        "kind": "page",
+        "start": 2356,
+        "end": 2356,
+        "page": 3,
+        "status": "unreadable",
+        "reasons": [
+          "undecodable_glyphs",
+          "font_without_unicode_map"
+        ]
+      },
+      {
+        "kind": "page",
+        "start": 2358,
+        "end": 5818,
+        "page": 4,
+        "status": "readable",
+        "flags": [
+          "full_page_image_under_text"
+        ]
+      },
+      {
+        "kind": "page",
+        "start": 5818,
+        "end": 5818,
+        "page": 5,
+        "status": "blank"
+      },
+      {
+        "kind": "page",
+        "start": 5818,
+        "end": 5818,
+        "page": 6,
+        "status": "unreadable",
+        "reasons": [
+          "no_text_layer"
+        ]
+      }
+    ],
+    "tables": [],
+    "metadata": {
+      "pages": 6,
+      "info": {},
+      "blank_pages": [
+        5
+      ]
+    }
+  }
+}

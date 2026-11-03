@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% if view.busy %}{{ view.busy.tab_title_prefix }} {% endif %}{{ title }}</title>
+  <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+  <link rel="stylesheet" href="/static/pico.min.css">
+  <link rel="stylesheet" href="/static/report.css">
+  {% if brand_css %}
+  <link rel="stylesheet" href="/static/brand/brand.css">
+  {% endif %}
+  <script src="/static/htmx.min.js"></script>
+</head>
+<body>
+  {% include "interface_root.html.j2" %}
+  <script src="/static/report.js"></script>
+</body>
+</html>

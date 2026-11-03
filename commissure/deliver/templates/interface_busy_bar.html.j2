@@ -1,0 +1,60 @@
+<div
+  id="workspace-busy-bar"
+  class="header-busy-slot"
+  hx-get="/_status"
+  hx-trigger="every 5s"
+  hx-swap="outerHTML"
+  data-page-title="{{ view.busy.tab_title_prefix }} {{ title }}"
+>
+  <details id="busy-status-details" name="header-panel" class="header-disclosure header-status">
+    <summary class="header-icon-btn header-icon-busy" aria-label="{{ view.busy.short_label }}">
+      <span class="busy-dot" aria-hidden="true"></span>
+    </summary>
+    <div class="header-popover-card header-popover-right header-status-card">
+      <div id="busy-status-label" class="status-card-title">
+        <span class="busy-dot" aria-hidden="true"></span>
+        <span><strong>{{ view.busy.label }}</strong></span>
+      </div>
+      <div class="status-card-meta">
+        {% if view.busy.done is not none and view.busy.total is not none %}
+        <span class="status-card-counts">{{ view.busy.done }} / {{ view.busy.total }} items ({{ view.busy.percent }}%)</span>
+        <span aria-hidden="true">&middot;</span>
+        {% elif view.busy.done is not none %}
+        <span class="status-card-counts">{{ view.busy.done }} items processed</span>
+        <span aria-hidden="true">&middot;</span>
+        {% endif %}
+        {% if view.busy.warning is not none or view.busy.quarantined is not none %}
+        <span class="status-card-counts">warnings={{ view.busy.warning or 0 }} quarantined={{ view.busy.quarantined or 0 }}</span>
+        <span aria-hidden="true">&middot;</span>
+        {% endif %}
+        <span>{{ view.busy.elapsed_display }} elapsed</span>
+        {% if view.busy.remaining_display %}
+        <span aria-hidden="true">&middot;</span>
+        <span>~{{ view.busy.remaining_display }} remaining</span>
+        {% endif %}
+        {% if view.busy.last_activity_seconds is not none and view.busy.last_activity_seconds >= 15 %}
+        <span aria-hidden="true">&middot;</span>
+        <span>working on item ({{ view.busy.last_activity_seconds }}s)</span>
+        {% endif %}
+      </div>
+      <progress
+        class="busy-progress"
+        {% if view.busy.done is not none and view.busy.total is not none %}value="{{ view.busy.done }}" max="{{ view.busy.total }}"{% endif %}
+        aria-labelledby="busy-status-label"
+      ></progress>
+      <p class="status-card-note">
+        {% if view.busy.source == "external" %}
+        Something else is still running. You can keep browsing, but you can't start a new action until it finishes.
+        {% else %}
+        You can keep browsing. You can't start another action until this one finishes.
+        {% endif %}
+      </p>
+    </div>
+  </details>
+  <div class="header-busy-rail" aria-hidden="true">
+    <span
+      class="header-busy-rail-fill{% if view.busy.percent is none %} is-indeterminate{% endif %}"
+      {% if view.busy.percent is not none %}style="inline-size: {{ view.busy.percent }}%;"{% endif %}
+    ></span>
+  </div>
+</div>

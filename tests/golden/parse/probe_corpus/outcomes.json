@@ -1,0 +1,82 @@
+{
+  "broken.pdf": {
+    "pdfium": {
+      "outcome": "quarantined",
+      "reason_code": "parse_error"
+    },
+    "pdfplumber": {
+      "outcome": "quarantined",
+      "reason_code": "parse_error"
+    }
+  },
+  "mixed.pdf": {
+    "pdfium": {
+      "outcome": "warning",
+      "reason_code": "full_page_image_under_text,unreadable_pages"
+    },
+    "pdfplumber": {
+      "outcome": "warning",
+      "reason_code": "full_page_image_under_text,unreadable_pages"
+    }
+  },
+  "native.pdf": {
+    "pdfium": {
+      "outcome": "warning",
+      "reason_code": "full_page_image_under_text"
+    },
+    "pdfplumber": {
+      "outcome": "warning",
+      "reason_code": "full_page_image_under_text"
+    }
+  },
+  "notes.txt": {
+    "(none)": {
+      "outcome": "skipped",
+      "reason_code": "no_parser"
+    }
+  },
+  "quoted_bom.csv": {
+    "csv": {
+      "outcome": "warning",
+      "reason_code": "ragged_rows"
+    }
+  },
+  "report.docx": {
+    "docx": {
+      "outcome": "valid",
+      "reason_code": null
+    }
+  },
+  "scanned.pdf": {
+    "pdfium": {
+      "outcome": "quarantined",
+      "reason_code": "no_readable_text,unreadable_pages"
+    },
+    "pdfplumber": {
+      "outcome": "quarantined",
+      "reason_code": "no_readable_text,unreadable_pages"
+    }
+  },
+  "table.csv": {
+    "csv": {
+      "outcome": "warning",
+      "reason_code": "ragged_rows"
+    }
+  },
+  "type3.pdf": {
+    "pdfium": {
+      "outcome": "warning",
+      "reason_code": "unreadable_pages"
+    },
+    "pdfplumber": {
+      "outcome": "warning",
+      "reason_code": "unreadable_pages"
+    }
+  },
+  "workbook.xlsx": {
+    "xlsx": {
+      "outcome": "warning",
+      "reason_code": "uncached_formulas"
+    }
+  }
+}

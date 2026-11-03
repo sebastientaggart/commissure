@@ -1,0 +1,103 @@
+%PDF-1.7
+%‚„œ”
+1 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+2 0 obj
+<<  /Length 40 >>
+stream
+500 0 40 0 460 680 d1
+40 0 420 680 re f
+
+endstream
+endobj
+3 0 obj
+<<  /Length 17 >>
+stream
+250 0 0 0 0 0 d1
+
+endstream
+endobj
+4 0 obj
+<< /Type /Encoding /Differences [32 /space 46 /period 84 /T 97 /a 100 /d 101 /e 102 /f 103 /g 104 /h 105 /i 108 /l 109 /m 110 /n 111 /o 112 /p 114 /r 115 /s 116 /t 119 /w 121 /y] >>
+endobj
+5 0 obj
+<< /space 3 0 R /period 2 0 R /T 2 0 R /a 2 0 R /d 2 0 R /e 2 0 R /f 2 0 R /g 2 0 R /h 2 0 R /i 2 0 R /l 2 0 R /m 2 0 R /n 2 0 R /o 2 0 R /p 2 0 R /r 2 0 R /s 2 0 R /t 2 0 R /w 2 0 R /y 2 0 R >>
+endobj
+6 0 obj
+<< /Type /Font /Subtype /Type3 /FontBBox [0 0 500 700] /FontMatrix [0.001 0 0 0.001 0 0] /CharProcs 5 0 R /Encoding 4 0 R /FirstChar 32 /LastChar 122 /Widths [250 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500] >>
+endobj
+7 0 obj
+<< /g1 2 0 R /g2 2 0 R /g3 2 0 R /g4 2 0 R /g5 2 0 R /g6 2 0 R /g7 2 0 R /g8 2 0 R /g9 2 0 R /g10 2 0 R /g11 2 0 R /g12 2 0 R /g13 2 0 R /g14 2 0 R >>
+endobj
+8 0 obj
+<< /Type /Font /Subtype /Type3 /FontBBox [0 0 500 700] /FontMatrix [0.001 0 0 0.001 0 0] /CharProcs 7 0 R /FirstChar 1 /LastChar 14 /Widths [500 500 500 500 500 500 500 500 500 500 500 500 500 500] >>
+endobj
+9 0 obj
+<< /Type /Encoding /Differences [1 /g1 /g2 /g3 /g4 /g5 /g6 /g7 /g8 /g9 /g10 /g11 /g12 /g13 /g14] >>
+endobj
+10 0 obj
+<< /Type /Font /Subtype /Type3 /FontBBox [0 0 500 700] /FontMatrix [0.001 0 0 0.001 0 0] /CharProcs 7 0 R /Encoding 9 0 R /FirstChar 1 /LastChar 14 /Widths [500 500 500 500 500 500 500 500 500 500 500 500 500 500] >>
+endobj
+11 0 obj
+<<  /Length 74 >>
+stream
+BT /F1 12 Tf 72 700 Td (Type three font with standard glyph names.) Tj ET
+
+endstream
+endobj
+12 0 obj
+<< /Type /Page /Parent 17 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 6 0 R >> >> /Contents 11 0 R >>
+endobj
+13 0 obj
+<<  /Length 60 >>
+stream
+BT /F2 12 Tf 72 700 Td <0102030405060708090A0B0C0D0E> Tj ET
+
+endstream
+endobj
+14 0 obj
+<< /Type /Page /Parent 17 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F2 8 0 R >> >> /Contents 13 0 R >>
+endobj
+15 0 obj
+<<  /Length 60 >>
+stream
+BT /F3 12 Tf 72 700 Td <0102030405060708090A0B0C0D0E> Tj ET
+
+endstream
+endobj
+16 0 obj
+<< /Type /Page /Parent 17 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F3 10 0 R >> >> /Contents 15 0 R >>
+endobj
+17 0 obj
+<< /Type /Pages /Kids [12 0 R 14 0 R 16 0 R] /Count 3 >>
+endobj
+18 0 obj
+<< /Type /Catalog /Pages 17 0 R >>
+endobj
+xref
+0 19
+0000000000 65535 f 
+0000000015 00000 n 
+0000000112 00000 n 
+0000000203 00000 n 
+0000000271 00000 n 
+0000000468 00000 n 
+0000000678 00000 n 
+0000001220 00000 n 
+0000001386 00000 n 
+0000001602 00000 n 
+0000001717 00000 n 
+0000001950 00000 n 
+0000002076 00000 n 
+0000002205 00000 n 
+0000002317 00000 n 
+0000002446 00000 n 
+0000002558 00000 n 
+0000002688 00000 n 
+0000002761 00000 n 
+trailer
+<< /Size 19 /Root 18 0 R >>
+startxref
+2812
+%%EOF

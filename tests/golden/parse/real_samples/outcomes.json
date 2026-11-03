@@ -1,0 +1,50 @@
+{
+  "cover_unmapped.pdf": {
+    "pdfium": {
+      "outcome": "warning",
+      "reason_code": "full_page_image_under_text,unmapped_glyphs"
+    },
+    "pdfplumber": {
+      "outcome": "warning",
+      "reason_code": "full_page_image_under_text,unmapped_glyphs"
+    }
+  },
+  "events.json": {
+    "json": {
+      "outcome": "valid",
+      "reason_code": null
+    }
+  },
+  "inventory.xlsx": {
+    "xlsx": {
+      "outcome": "valid",
+      "reason_code": null
+    }
+  },
+  "project_report.pdf": {
+    "pdfium": {
+      "outcome": "valid",
+      "reason_code": null
+    },
+    "pdfplumber": {
+      "outcome": "valid",
+      "reason_code": null
+    }
+  },
+  "template.docx": {
+    "docx": {
+      "outcome": "valid",
+      "reason_code": null
+    }
+  },
+  "type3_unnamed.pdf": {
+    "pdfium": {
+      "outcome": "quarantined",
+      "reason_code": "no_readable_text,unreadable_pages"
+    },
+    "pdfplumber": {
+      "outcome": "quarantined",
+      "reason_code": "no_readable_text,unreadable_pages"
+    }
+  }
+}

@@ -1,0 +1,44 @@
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+dist/
+# build/ also holds the generated release repos (commissure release), each its own git repo.
+build/
+*.egg-info/
+
+# Workspaces are local data: state.db, blobs/, outputs/, named workspace/ at any depth,
+# plus state.db and the lock wherever --workspace pointed.
+workspace/
+state.db
+state.db-wal
+state.db-shm
+state.db-journal
+workspace.lock
+
+# Each solution under solutions/<name>/ is its own git repository; core tracks only
+# solutions/.gitkeep. Nested solution checkouts and solutions/.forbid.toml stay local.
+solutions/*
+!solutions/.gitkeep
+
+# Secrets stay local.
+.env
+.env.*
+!.env.example
+/secrets/
+
+# OS and editor noise. Office lock files match ingest DEFAULT_IGNORE.
+.DS_Store
+._*
+Thumbs.db
+desktop.ini
+~$*
+.~lock.*#
+
+# Personal Claude Code settings (permission rules for this machine only).
+.claude/settings.local.json
+
+# Local work plans (ephemeral agent scratchpad).
+docs/plans/
+docs/plan-*.md

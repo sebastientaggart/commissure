@@ -1,0 +1,176 @@
+{
+  "text_hash": "25a7ce75c1d15800cdf52512fb368c30d52b35cb670eb8d703de08ab74674d4d",
+  "outcome": "valid",
+  "reason_code": null,
+  "diagnostics": [],
+  "structure": {
+    "blocks": [
+      {
+        "kind": "heading",
+        "start": 0,
+        "end": 8,
+        "level": 1,
+        "status": "readable"
+      },
+      {
+        "kind": "paragraph",
+        "start": 10,
+        "end": 241,
+        "heading_path": [
+          "Overview"
+        ],
+        "status": "readable"
+      },
+      {
+        "kind": "heading",
+        "start": 243,
+        "end": 248,
+        "level": 2,
+        "heading_path": [
+          "Overview"
+        ],
+        "status": "readable"
+      },
+      {
+        "kind": "paragraph",
+        "start": 250,
+        "end": 402,
+        "heading_path": [
+          "Overview",
+          "Scope"
+        ],
+        "status": "readable"
+      },
+      {
+        "kind": "table",
+        "start": 404,
+        "end": 464,
+        "heading_path": [
+          "Overview",
+          "Scope"
+        ],
+        "table": 0,
+        "status": "readable"
+      },
+      {
+        "kind": "heading",
+        "start": 466,
+        "end": 473,
+        "level": 3,
+        "heading_path": [
+          "Overview",
+          "Scope"
+        ],
+        "status": "readable"
+      },
+      {
+        "kind": "paragraph",
+        "start": 475,
+        "end": 627,
+        "heading_path": [
+          "Overview",
+          "Scope",
+          "Details"
+        ],
+        "status": "readable"
+      },
+      {
+        "kind": "heading",
+        "start": 629,
+        "end": 636,
+        "level": 1,
+        "status": "readable"
+      },
+      {
+        "kind": "heading",
+        "start": 638,
+        "end": 653,
+        "level": 3,
+        "heading_path": [
+          "Results"
+        ],
+        "status": "readable"
+      },
+      {
+        "kind": "paragraph",
+        "start": 655,
+        "end": 675,
+        "heading_path": [
+          "Results",
+          "Skipped a level"
+        ],
+        "status": "readable"
+      },
+      {
+        "kind": "paragraph",
+        "start": 677,
+        "end": 829,
+        "heading_path": [
+          "Results",
+          "Skipped a level"
+        ],
+        "status": "readable"
+      },
+      {
+        "kind": "table",
+        "start": 829,
+        "end": 829,
+        "heading_path": [
+          "Results",
+          "Skipped a level"
+        ],
+        "table": 1,
+        "status": "readable"
+      }
+    ],
+    "tables": [
+      {
+        "heading_path": [
+          "Overview",
+          "Scope"
+        ],
+        "rows": [
+          [
+            "Area",
+            "Owner",
+            "Status",
+            "Due"
+          ],
+          [
+            "Intake",
+            "",
+            "",
+            ""
+          ],
+          [
+            "Merged across two columns",
+            null,
+            "",
+            ""
+          ]
+        ]
+      },
+      {
+        "heading_path": [
+          "Results",
+          "Skipped a level"
+        ],
+        "rows": [
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ]
+        ]
+      }
+    ],
+    "metadata": {
+      "author": "python-docx",
+      "created": "2026-01-01T00:00:00+00:00",
+      "modified": "2026-01-01T00:00:00+00:00"
+    }
+  }
+}

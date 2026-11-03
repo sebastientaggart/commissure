@@ -1,0 +1,17 @@
+{
+  "note": "Spans transcribed from a two-page PDF fixture under pdfplumber (pages 1-2). Tests rebuild text of these lengths with neutral characters; document prose is not stored here. ocr_page is a static OCR-shaped block (tesseract was unavailable when this fixture was written).",
+  "separator": "\n\n",
+  "pages": [
+    {"kind": "page", "start": 0, "end": 4032, "page": 1, "status": "readable"},
+    {"kind": "page", "start": 4034, "end": 7034, "page": 2, "status": "readable"}
+  ],
+  "ocr_page": {
+    "kind": "page",
+    "start": 0,
+    "end": 120,
+    "page": 1,
+    "status": "readable",
+    "flags": ["ocr"],
+    "confidence": 85.0
+  }
+}

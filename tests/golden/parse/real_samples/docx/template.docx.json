@@ -1,0 +1,200 @@
+{
+  "text_hash": "714489e2cfa09727853bf34cf30167da5d2fd484dc05b404e719e87ec5aaea40",
+  "outcome": "valid",
+  "reason_code": null,
+  "diagnostics": [],
+  "structure": {
+    "blocks": [
+      {
+        "kind": "heading",
+        "start": 0,
+        "end": 24,
+        "level": 1,
+        "status": "readable"
+      },
+      {
+        "kind": "paragraph",
+        "start": 26,
+        "end": 86,
+        "heading_path": [
+          "Program Improvement Plan"
+        ],
+        "status": "readable"
+      },
+      {
+        "kind": "heading",
+        "start": 88,
+        "end": 115,
+        "level": 2,
+        "heading_path": [
+          "Program Improvement Plan"
+        ],
+        "status": "readable"
+      },
+      {
+        "kind": "paragraph",
+        "start": 117,
+        "end": 168,
+        "heading_path": [
+          "Program Improvement Plan",
+          "Part 1: Baseline Assessment"
+        ],
+        "status": "readable"
+      },
+      {
+        "kind": "heading",
+        "start": 170,
+        "end": 202,
+        "level": 3,
+        "heading_path": [
+          "Program Improvement Plan",
+          "Part 1: Baseline Assessment"
+        ],
+        "status": "readable"
+      },
+      {
+        "kind": "paragraph",
+        "start": 204,
+        "end": 264,
+        "heading_path": [
+          "Program Improvement Plan",
+          "Part 1: Baseline Assessment",
+          "Section 1.1: Root Cause Analysis"
+        ],
+        "status": "readable"
+      },
+      {
+        "kind": "heading",
+        "start": 266,
+        "end": 297,
+        "level": 4,
+        "heading_path": [
+          "Program Improvement Plan",
+          "Part 1: Baseline Assessment",
+          "Section 1.1: Root Cause Analysis"
+        ],
+        "status": "readable"
+      },
+      {
+        "kind": "paragraph",
+        "start": 299,
+        "end": 351,
+        "heading_path": [
+          "Program Improvement Plan",
+          "Part 1: Baseline Assessment",
+          "Section 1.1: Root Cause Analysis",
+          "Item 1.1.1: Intake Verification"
+        ],
+        "status": "readable"
+      },
+      {
+        "kind": "paragraph",
+        "start": 353,
+        "end": 378,
+        "heading_path": [
+          "Program Improvement Plan",
+          "Part 1: Baseline Assessment",
+          "Section 1.1: Root Cause Analysis",
+          "Item 1.1.1: Intake Verification"
+        ],
+        "status": "readable"
+      },
+      {
+        "kind": "paragraph",
+        "start": 380,
+        "end": 401,
+        "heading_path": [
+          "Program Improvement Plan",
+          "Part 1: Baseline Assessment",
+          "Section 1.1: Root Cause Analysis",
+          "Item 1.1.1: Intake Verification"
+        ],
+        "status": "readable"
+      },
+      {
+        "kind": "table",
+        "start": 403,
+        "end": 501,
+        "heading_path": [
+          "Program Improvement Plan",
+          "Part 1: Baseline Assessment",
+          "Section 1.1: Root Cause Analysis",
+          "Item 1.1.1: Intake Verification"
+        ],
+        "table": 0,
+        "status": "readable"
+      },
+      {
+        "kind": "table",
+        "start": 503,
+        "end": 601,
+        "heading_path": [
+          "Program Improvement Plan",
+          "Part 1: Baseline Assessment",
+          "Section 1.1: Root Cause Analysis",
+          "Item 1.1.1: Intake Verification"
+        ],
+        "table": 1,
+        "status": "readable"
+      }
+    ],
+    "tables": [
+      {
+        "heading_path": [
+          "Program Improvement Plan",
+          "Part 1: Baseline Assessment",
+          "Section 1.1: Root Cause Analysis",
+          "Item 1.1.1: Intake Verification"
+        ],
+        "rows": [
+          [
+            "Milestone",
+            "Owner",
+            "Target Quarter"
+          ],
+          [
+            "Action Step 1.A",
+            "Regional Lead",
+            "Q2"
+          ],
+          [
+            "Action Step 1.B",
+            "Quality Analyst",
+            "Q3"
+          ]
+        ]
+      },
+      {
+        "heading_path": [
+          "Program Improvement Plan",
+          "Part 1: Baseline Assessment",
+          "Section 1.1: Root Cause Analysis",
+          "Item 1.1.1: Intake Verification"
+        ],
+        "rows": [
+          [
+            "Milestone",
+            "Owner",
+            "Target Quarter"
+          ],
+          [
+            "Action Step 2.A",
+            "Regional Lead",
+            "Q2"
+          ],
+          [
+            "Action Step 2.B",
+            "Quality Analyst",
+            "Q3"
+          ]
+        ]
+      }
+    ],
+    "metadata": {
+      "title": "Program Improvement Plan Template",
+      "author": "Operations Team",
+      "created": "2026-01-15T00:00:00+00:00",
+      "modified": "2026-01-15T00:00:00+00:00"
+    }
+  }
+}

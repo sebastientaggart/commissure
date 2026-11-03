@@ -1,0 +1,9 @@
+# What this solution ships to a client (commissure release). Fill in summary and usage before
+# its first release: the release tool refuses while either still says TODO.
+version = "0.1.0"
+summary = "TODO: one line on what this solution does, for the client's README."
+# include = ["recipe", "CHANGELOG.md"]   # the default; add files the client needs
+# exclude = ["recipe/AGENTS.md"]         # internal notes that should stay home
+usage = """
+TODO: the commands the client runs from `solutions/__SOLUTION_NAME__/`, in order.
+"""

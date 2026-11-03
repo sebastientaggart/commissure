@@ -1,0 +1,62 @@
+{
+  "text_hash": "c1b6bda8a7b2a4b767e9c5b53a5058e88de332f4346c16ed2e3c9205cebb6342",
+  "outcome": "warning",
+  "reason_code": "ragged_rows",
+  "diagnostics": [
+    {
+      "code": "ragged_rows",
+      "detail": {
+        "count": 1,
+        "first_rows": [
+          4
+        ]
+      }
+    }
+  ],
+  "structure": {
+    "blocks": [
+      {
+        "kind": "table",
+        "start": 0,
+        "end": 53,
+        "table": 0,
+        "status": "readable"
+      }
+    ],
+    "tables": [
+      {
+        "rows": [
+          [
+            "code",
+            "label",
+            "qty"
+          ],
+          [
+            "A1",
+            "first",
+            "3"
+          ],
+          [
+            "A2",
+            null,
+            "4.5"
+          ],
+          [
+            "A3",
+            "third"
+          ],
+          [
+            "A4",
+            "fourth",
+            null
+          ]
+        ]
+      }
+    ],
+    "metadata": {
+      "encoding": "utf-8-sig",
+      "delimiter": ";",
+      "rows": 5
+    }
+  }
+}

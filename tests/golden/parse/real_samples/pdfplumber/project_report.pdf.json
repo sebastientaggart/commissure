@@ -1,0 +1,51 @@
+{
+  "text_hash": "7b5876cb6792905efb050f31a133d72ec3b7553e25d196f76190f031234a1bf5",
+  "outcome": "valid",
+  "reason_code": null,
+  "diagnostics": [],
+  "structure": {
+    "blocks": [
+      {
+        "kind": "page",
+        "start": 0,
+        "end": 931,
+        "page": 1,
+        "status": "readable"
+      },
+      {
+        "kind": "page",
+        "start": 933,
+        "end": 2815,
+        "page": 2,
+        "status": "readable"
+      }
+    ],
+    "tables": [
+      {
+        "page": 1,
+        "rows": [
+          [
+            "Workstream",
+            "Planned",
+            "Completed"
+          ],
+          [
+            "Intake",
+            "120",
+            "118"
+          ],
+          [
+            "Review",
+            "95",
+            "95"
+          ]
+        ]
+      }
+    ],
+    "metadata": {
+      "pages": 2,
+      "info": {},
+      "blank_pages": []
+    }
+  }
+}

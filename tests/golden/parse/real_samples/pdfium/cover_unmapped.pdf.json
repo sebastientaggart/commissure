@@ -1,0 +1,44 @@
+{
+  "text_hash": "44fa1995fb6838a6730aa8f080be226e764c5f620cf69ec63631b1a85bd4856e",
+  "outcome": "warning",
+  "reason_code": "full_page_image_under_text,unmapped_glyphs",
+  "diagnostics": [
+    {
+      "code": "unmapped_glyphs",
+      "detail": {
+        "pages": [
+          1
+        ]
+      }
+    },
+    {
+      "code": "full_page_image_under_text",
+      "detail": {
+        "pages": [
+          1
+        ]
+      }
+    }
+  ],
+  "structure": {
+    "blocks": [
+      {
+        "kind": "page",
+        "start": 0,
+        "end": 2269,
+        "page": 1,
+        "status": "readable",
+        "flags": [
+          "unmapped_glyphs",
+          "full_page_image_under_text"
+        ]
+      }
+    ],
+    "tables": [],
+    "metadata": {
+      "pages": 1,
+      "info": {},
+      "blank_pages": []
+    }
+  }
+}

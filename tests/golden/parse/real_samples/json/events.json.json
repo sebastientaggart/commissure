@@ -1,0 +1,20 @@
+{
+  "text_hash": "d01bdd1e1a8845c7db775503c623d1258c5b909d3077e906ffa8e67bfc0839d1",
+  "outcome": "valid",
+  "reason_code": null,
+  "diagnostics": [],
+  "structure": {
+    "blocks": [
+      {
+        "kind": "document",
+        "start": 0,
+        "end": 943,
+        "status": "readable"
+      }
+    ],
+    "tables": [],
+    "metadata": {
+      "top_level": "list"
+    }
+  }
+}

@@ -1,0 +1,27 @@
+<p class="muted">{{ row_count }} row{% if row_count != 1 %}s{% endif %}</p>
+{% if is_empty %}
+<p>No rows.</p>
+{% endif %}
+<div class="table-tools">
+  <label>Find in this table
+    <input type="search" data-filter="#records" placeholder="Filter rows">
+  </label>
+</div>
+<table id="records" data-sortable>
+  <thead>
+    <tr>
+      {% for header in headers %}
+      <th scope="col">{{ header }}</th>
+      {% endfor %}
+    </tr>
+  </thead>
+  <tbody>
+    {% for row in rows %}
+    <tr>
+      {% for cell in row %}
+      <td>{{ cell }}</td>
+      {% endfor %}
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>

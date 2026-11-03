@@ -1,0 +1,69 @@
+{
+  "text_hash": "0b8ee0e3b3ba87c9976c8e519e7d29ccb4c2e6c02f00f363a2c15823fea47566",
+  "outcome": "warning",
+  "reason_code": "ragged_rows",
+  "diagnostics": [
+    {
+      "code": "ragged_rows",
+      "detail": {
+        "count": 1,
+        "first_rows": [
+          3
+        ]
+      }
+    }
+  ],
+  "structure": {
+    "blocks": [
+      {
+        "kind": "table",
+        "start": 0,
+        "end": 210,
+        "table": 0,
+        "status": "readable"
+      }
+    ],
+    "tables": [
+      {
+        "rows": [
+          [
+            "grantee_id",
+            "organization",
+            "state",
+            "award"
+          ],
+          [
+            "HHS-001",
+            "Bright Start Family Services",
+            "MD",
+            "250000"
+          ],
+          [
+            "HHS-002",
+            "St. Jude Mercy",
+            " West\" Clinic\"",
+            "PA",
+            "180000"
+          ],
+          [
+            "HHS-003",
+            "Harbor Community Health",
+            "VA",
+            "310000"
+          ],
+          [
+            "HHS-004",
+            "Mountain View, Inc.",
+            "WV",
+            "145000"
+          ]
+        ]
+      }
+    ],
+    "metadata": {
+      "encoding": "utf-8-sig",
+      "delimiter": ",",
+      "rows": 5
+    }
+  }
+}

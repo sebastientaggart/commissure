@@ -1,0 +1,30 @@
+{
+  "text_hash": "2dfff8a76a67676b64816cffcd1ece2db1738caf98e8e1bc5c83e4bbd1168689",
+  "outcome": "valid",
+  "reason_code": null,
+  "diagnostics": [],
+  "structure": {
+    "blocks": [
+      {
+        "kind": "page",
+        "start": 0,
+        "end": 942,
+        "page": 1,
+        "status": "readable"
+      },
+      {
+        "kind": "page",
+        "start": 944,
+        "end": 2826,
+        "page": 2,
+        "status": "readable"
+      }
+    ],
+    "tables": [],
+    "metadata": {
+      "pages": 2,
+      "info": {},
+      "blank_pages": []
+    }
+  }
+}

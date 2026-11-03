@@ -1,0 +1,51 @@
+{#- One sample (commissure/review_page.py). Every printed value passes `_inert`. -#}
+<nav class="app-back-nav"><a href="/review">&larr; All samples</a></nav>
+
+<article>
+  <h2>Sample {{ sample.id }}: <code>{{ sample.check_id }}</code></h2>
+  <p><strong>{{ sample.question }}</strong></p>
+  <p class="muted">{{ sample.n }} of {{ sample.population }} instances{% if sample.census %} (all){% endif %}, drawn from run {{ sample.snapshot_run_id or "-" }} with seed {{ sample.seed }} by {{ sample.reviewer }} on {{ sample.created_at }}.</p>
+  <div class="kpis">
+    <div class="kpi"><strong>{{ sample.correct }}</strong> correct</div>
+    <div class="kpi"><strong>{{ sample.wrong }}</strong> wrong</div>
+    <div class="kpi"><strong>{{ sample.unclear }}</strong> unclear</div>
+    <div class="kpi"><strong>{{ sample.pending }}</strong> pending</div>
+    <div class="kpi"><strong>{{ sample.rate | pct }}</strong> error rate{% if sample.interval_95 %} ({{ sample.interval_95[0] | pct }} to {{ sample.interval_95[1] | pct }}){% endif %}</div>
+  </div>
+  {% if next_instance %}<p><a role="button" href="/review/instance/{{ next_instance }}">Continue reviewing</a></p>{% endif %}
+</article>
+
+{% if carryable %}
+<article>
+  <h2>Earlier verdicts</h2>
+  <p>{{ carryable }} pending instance(s) are identical to ones already judged, and their earlier answers agree. Confirming records those answers as your own verdicts in this sample; nothing counts until you do.</p>
+  <form method="post" action="/review/carry">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input type="hidden" name="sample_id" value="{{ sample.id }}">
+    <div class="form-row">
+      <label>Reviewer <input type="text" name="reviewer" value="{{ reviewer }}" required></label>
+      <button type="submit">Confirm {{ carryable }} earlier verdict(s)</button>
+    </div>
+  </form>
+</article>
+{% endif %}
+
+<article>
+  <h2>Instances</h2>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th scope="col">#</th><th scope="col">Subject</th><th scope="col">Field</th><th scope="col">Verdict</th><th scope="col">Earlier</th></tr></thead>
+      <tbody>
+        {% for i in instances %}
+        <tr>
+          <td><a href="/review/instance/{{ i.instance_id }}">{{ i.position }}</a></td>
+          <td><code>{{ i.subject_key }}</code></td>
+          <td><code>{{ i.pointer if i.pointer is not none else "page " ~ i.page }}</code></td>
+          <td>{% if i.answer == "correct" %}<span class="badge badge-ok">correct</span>{% elif i.answer == "wrong" %}<span class="badge badge-error">wrong</span>{% elif i.answer %}<span class="badge badge-warn">{{ i.answer }}</span>{% else %}<span class="muted">pending</span>{% endif %}{% if i.note %} <span class="muted">{{ i.note }}</span>{% endif %}</td>
+          <td>{{ i.earlier_answers | join(", ") or "-" }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</article>

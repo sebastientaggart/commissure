@@ -1,0 +1,120 @@
+{
+  "text_hash": "175ddfc6bb68cdf95f0d38d50ffa7dfa4faa04b5f87f2d5233b3ffdfaeef1fec",
+  "outcome": "warning",
+  "reason_code": "uncached_formulas",
+  "diagnostics": [
+    {
+      "code": "uncached_formulas",
+      "detail": {
+        "count": 4,
+        "first_cells": [
+          "Data!E2",
+          "Data!E3",
+          "Data!E4",
+          "Data!E5"
+        ]
+      }
+    }
+  ],
+  "structure": {
+    "blocks": [
+      {
+        "kind": "sheet",
+        "start": 0,
+        "end": 132,
+        "name": "Data",
+        "table": 0,
+        "status": "readable"
+      },
+      {
+        "kind": "sheet",
+        "start": 134,
+        "end": 180,
+        "name": "Notes",
+        "table": 1,
+        "status": "readable"
+      }
+    ],
+    "tables": [
+      {
+        "sheet": "Data",
+        "rows": [
+          [
+            "id",
+            "name",
+            "amount",
+            "date",
+            "double"
+          ],
+          [
+            1,
+            "alpha",
+            10.5,
+            "2026-01-05T00:00:00",
+            null
+          ],
+          [
+            2,
+            null,
+            20,
+            "2026-02-05T00:00:00",
+            null
+          ],
+          [
+            3,
+            "gamma",
+            null,
+            null,
+            null
+          ],
+          [
+            4,
+            "delta",
+            7.25,
+            "2026-04-05T00:00:00",
+            null
+          ]
+        ]
+      },
+      {
+        "sheet": "Notes",
+        "rows": [
+          [
+            "Quarterly notes",
+            null
+          ],
+          [
+            null,
+            null
+          ],
+          [
+            "key",
+            "value"
+          ],
+          [
+            "owner",
+            "ops"
+          ],
+          [
+            "status",
+            null
+          ]
+        ]
+      }
+    ],
+    "metadata": {
+      "sheets": [
+        {
+          "name": "Data",
+          "state": "visible",
+          "rows": 5
+        },
+        {
+          "name": "Notes",
+          "state": "visible",
+          "rows": 5
+        }
+      ]
+    }
+  }
+}

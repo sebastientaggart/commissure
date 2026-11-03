@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 264 104" width="264" height="104" role="img" aria-label="Commissure">
+  <style>
+    :root { --ink:#1f2328; --accent:#d9480f; }
+    @media (prefers-color-scheme: dark) { :root { --ink:#e6edf3; --accent:#ff7b3d; } }
+    .s { stroke:var(--ink); fill:none; stroke-linecap:round; stroke-linejoin:round; }
+    .b { stroke:var(--accent); fill:none; stroke-linecap:round; }
+    .w { fill:var(--ink); }
+  </style>
+  <g transform="translate(132,52) scale(1.0)" style="stroke-width:8">
+    <path class="s" d="M -44 -40 H -80 A 40 40 0 0 0 -80 40 H -44"/>
+    <path class="s" d="M 44 -40 H 80 A 40 40 0 0 1 80 40 H 44"/>
+    <path class="b" d="M -20 -20 H 20"/>
+    <path class="b" d="M -20 0 H 20"/>
+    <path class="b" d="M -20 20 H 20"/>
+  </g>
+</svg>

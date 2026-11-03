@@ -1,0 +1,10 @@
+Outcome Measure Inventory: Field Descriptions	
+Field Name	Definition
+Measure ID	Unique identifier assigned to the instrument.
+Domain	Primary operational domain assessed by the measure.
+Validated	Whether the instrument has completed validation.
+
+Measure ID	Instrument Name	Domain	Validated	Notes
+M-101	Intake Completeness Index	Intake	Yes	
+M-102	Turnaround Interval Tracker	Processing	Yes	Core metric
+M-103	Reviewer Agreement Scale	Quality	No	

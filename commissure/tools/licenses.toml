@@ -1,0 +1,115 @@
+# License decisions for Commissure (read by commissure/tools/licenses.py).
+#
+# Holds only what metadata cannot say: the allowlist, overrides, exceptions, and vendored-file
+# provenance. Versions and licenses of Python packages come from installed metadata; run
+# `commissure licenses` for the inventory. tests/test_licenses.py enforces this file.
+
+# Reviewers approve these without review. Adding an id is a policy decision.
+allowed = [
+    "0BSD",
+    "Apache-2.0",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "MIT",
+    "MIT-0",
+    "MIT-CMU",
+    "PSF-2.0",
+]
+
+# Commissure's own files in commissure/deliver/static/ (MIT, with the package). Every other
+# file there must be a [[vendored]] entry below, so a new file cannot arrive without a license
+# decision. logo.svg's wordmark is Inter Medium outlined to paths (OFL-1.1 permits this; no font
+# file is embedded). Top-level keys must precede the tables below (TOML).
+first_party = ["favicon.svg", "logo.svg", "report.css", "report.js"]
+
+# --- Overrides -------------------------------------------------------------------------------
+# For packages whose metadata names no SPDX license. `declared` is the string the metadata
+# reports today; when it changes the override stops applying and the gate fails, so a relicense
+# cannot hide behind a stale override.
+
+[packages.jinja2]
+declared = "BSD License"
+license = "BSD-3-Clause"
+note = "Legacy classifier; jinja2-*.dist-info/licenses/LICENSE.txt is BSD-3-Clause."
+
+[packages.pypdfium2]
+declared = "BSD-3-Clause, Apache-2.0, dependency licenses"
+license = "Apache-2.0 OR BSD-3-Clause"
+note = """Bindings are dual-licensed. The bundled PDFium binary and its components \
+(BUILD_LICENSES/ in the wheel) are permissive: BSD-3-Clause, Apache-2.0, MIT, FTL, \
+Unicode-3.0, IJG, Libpng, Zlib. LICENSES/CC-BY-4.0.txt covers documentation only."""
+
+# --- Exceptions ------------------------------------------------------------------------------
+# Operator-approved departures from the allowlist. `scope` is "core" or "extra:<name>". An
+# exception with `component` records non-permissive code bundled inside a package whose own
+# metadata is permissive; metadata cannot see it, so it is reviewed by hand on upgrade.
+
+[[exception]]
+package = "docxtpl"
+license = "LGPL-2.1-only"
+scope = "extra:docx"
+decided = "2026-10-25"
+reason = """Kept out of core so `pip install commissure` stays permissive; core never imports \
+it (tests/test_licenses.py). Recipes opt in for .docx templates with conditionals and block \
+loops, which no permissive library offers (docx-mailmerge, MIT, has merge fields and row \
+repetition only). Using the unmodified library imposes nothing on Commissure or recipe source; \
+shipping it inside a closed binary or appliance would require LGPL compliance for docxtpl."""
+
+[[exception]]
+package = "lxml"
+component = "GNU libiconv, statically linked into PyPI binary wheels"
+license = "LGPL-2.1"
+scope = "core"
+decided = "2026-10-25"
+reason = """Pulled in by python-docx. Running from source or a uv environment triggers no \
+obligation. Redistributing prebuilt wheels inside a closed executable, appliance, or container \
+image would; then build lxml from source against OS libraries \
+(`uv sync --no-binary-package lxml`). The wheel's two unlicensed isoschematron XSL files are \
+never imported (only lxml.etree is used)."""
+
+# --- Vendored browser assets (commissure/deliver/static/) ------------------------------------
+# Each extracted unmodified from its npm tarball after checking the registry's SHA-512
+# integrity. `sha256` is the file as shipped; changing the file means updating its entry.
+
+[[vendored]]
+file = "htmx.min.js"
+package = "htmx.org"
+version = "2.0.11"
+license = "0BSD"
+license_file = "licenses/htmx.LICENSE.txt"
+source = "https://registry.npmjs.org/htmx.org/-/htmx.org-2.0.11.tgz"
+source_sha256 = "165a2655073e9e6e55e307a7c74e8ebcdb76afb7701f9c16cfd106a13add408e"
+sha256 = "d6fdc75f204e6bdefa99b69bf1e6d4ac69b8a364f77929f45c13476b4000f717"
+
+[[vendored]]
+file = "chart.umd.min.js"
+package = "chart.js"
+version = "4.6.1"
+license = "MIT"
+license_file = "licenses/chartjs.LICENSE.md"
+source = "https://registry.npmjs.org/chart.js/-/chart.js-4.6.1.tgz"
+source_sha256 = "9345dacdf4bb4c5d40321f4b9aafab6fe676d37a534fc0bc2d17c4c4e29c4f00"
+sha256 = "87364cc2b2a76a6684929e7d6b80b18a897794db38400caff1fcf1791c6925d2"
+note = "Bundles @kurkle/color 0.3.2 (MIT, banner preserved)."
+
+[[vendored]]
+file = "cytoscape.min.js"
+package = "cytoscape"
+version = "3.34.4"
+license = "MIT"
+license_file = "licenses/cytoscape.LICENSE.txt"
+source = "https://registry.npmjs.org/cytoscape/-/cytoscape-3.34.4.tgz"
+source_sha256 = "0d02363d99d805ce8d91fdecab7b2a8cb91ee280d67f309ce44c161d117b4679"
+sha256 = "081591ab735b2b6a3b31a3c60f8f3a3e2fee8c92939e0c7820ad1208571b6cd8"
+note = "Bundles Thenable, a Bezier generator, and Framer.js spring physics (all MIT, banners preserved)."
+
+[[vendored]]
+file = "pico.min.css"
+package = "@picocss/pico"
+version = "2.1.1"
+license = "MIT"
+license_file = "licenses/pico.LICENSE.md"
+source = "https://registry.npmjs.org/@picocss/pico/-/pico-2.1.1.tgz"
+source_sha256 = "4affbb56f49df6d5325610b06762156f1dcdbc6ef57cea5c136d7e8a00a8cd24"
+sha256 = "fbc9a63fc9fc9f72d12fd7fc9806e11fa9f77ae4f9cad146b27003a1119ba3db"
