@@ -36,8 +36,10 @@ desktop.ini
 ~$*
 .~lock.*#
 
-# Personal Claude Code settings (permission rules for this machine only).
+# Personal agent and ide settings (permission rules for this machine only).
 .claude/settings.local.json
+.ignore
+*.code-workspace
 
 # Local work plans (ephemeral agent scratchpad).
 docs/plans/
