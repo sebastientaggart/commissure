@@ -1,13 +1,32 @@
 name: CI
 
+# Prose only: no test or lint reads these. A push touching anything else still runs CI.
+# Markdown inside commissure/ (scaffold template, vendored licenses) ships and is tested.
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - "*.md"
+      - ".agents/**"
+      - "docs/**/*.md"
+      - "docs/**/*.svg"
   pull_request:
+    paths-ignore:
+      - "*.md"
+      - ".agents/**"
+      - "docs/**/*.md"
+      - "docs/**/*.svg"
+
+# A newer push to the same branch or PR makes the running check moot.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test:
     runs-on: ubuntu-latest
+    # A normal run is ~5 min; the default 6 h limit would let a hung test burn the quota.
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
 

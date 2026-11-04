@@ -101,7 +101,8 @@ def test_ocr_recognises_image_only_pages_and_refuses_noise(cli, ws_root, corpus)
     assert outcomes["blank_scan.pdf"]["reason_code"].startswith("no_readable_text")
     diag = {d["code"]: d for d in json.loads(outcomes["blank_scan.pdf"]["diagnostics"])}
     reasons = diag["unreadable_pages"]["detail"]["reasons"]["1"]
-    assert reasons[0] == "image_only" and reasons[1].startswith("ocr_")
+    # Exactly no_text: a noisier page that OCRs into rejected garbage is slow (see generator).
+    assert reasons == ["image_only", "ocr_no_text"]
     assert ("blank_scan.pdf", "ocr") not in rows
 
 

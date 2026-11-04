@@ -61,7 +61,9 @@ def noise_page(seed: int = 7) -> Image.Image:
     rng = random.Random(seed)
     img = Image.new("L", (PAGE[0] // 4, PAGE[1] // 4), 250)
     px = img.load()
-    for _ in range(4000):
+    # Sparse on purpose: Tesseract's time grows with speck count (4000 took 4s per read,
+    # 1000 takes 0.2s) and several tests OCR this page; both yield `ocr_no_text`.
+    for _ in range(1000):
         px[rng.randrange(img.width), rng.randrange(img.height)] = rng.randrange(200, 245)
     return img.resize(PAGE)
 
