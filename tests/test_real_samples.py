@@ -3,10 +3,12 @@ reviewed expectations in tests/fixtures/real_samples.expected.json. The manifest
 outside the folder so probing or ingesting the folder sees only samples."""
 
 import json
+from fnmatch import fnmatch
 from pathlib import Path
 
 import pytest
 
+from commissure.ingest import DEFAULT_IGNORE
 from commissure.probe import probe_path
 
 SAMPLES = Path(__file__).parent / "fixtures" / "real_samples"
@@ -19,7 +21,12 @@ def probed():
 
 
 def test_every_sample_has_reviewed_expectations():
-    on_disk = {p.name for p in SAMPLES.iterdir() if p.is_file()}
+    # Ingest skips OS junk (Finder's .DS_Store), so it is not a sample.
+    on_disk = {
+        p.name
+        for p in SAMPLES.iterdir()
+        if p.is_file() and not any(fnmatch(p.name, pat) for pat in DEFAULT_IGNORE)
+    }
     assert on_disk == set(MANIFEST)
 
 

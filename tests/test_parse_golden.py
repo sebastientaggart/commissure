@@ -13,9 +13,12 @@ then review `git diff tests/golden` before committing.
 import json
 import os
 import shutil
+from fnmatch import fnmatch
 from pathlib import Path
 
 import pytest
+
+from commissure.ingest import DEFAULT_IGNORE
 
 FIXTURES = Path(__file__).parent / "fixtures"
 GOLDEN = Path(__file__).parent / "golden" / "parse"
@@ -79,7 +82,12 @@ def test_parse_matches_golden(cli, tmp_path, corpus):
         for rel, content in produced.items():
             (golden_dir / rel).parent.mkdir(parents=True, exist_ok=True)
             (golden_dir / rel).write_text(content, encoding="utf-8")
-    on_disk = {p.relative_to(golden_dir) for p in golden_dir.rglob("*") if p.is_file()}
+    # Finder writes .DS_Store into any folder it opens; OS junk is not a golden file.
+    on_disk = {
+        p.relative_to(golden_dir)
+        for p in golden_dir.rglob("*")
+        if p.is_file() and not any(fnmatch(p.name, pat) for pat in DEFAULT_IGNORE)
+    }
     assert on_disk == set(produced), "golden files out of date; see module docstring"
     for rel, content in sorted(produced.items()):
         assert (golden_dir / rel).read_text(encoding="utf-8") == content, rel
