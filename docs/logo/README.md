@@ -8,7 +8,7 @@ All files are self-contained SVGs with dark-mode support via `@media (prefers-co
 | `logo.svg` | `449 × 71` | Horizontal inline lockup (mark + wordmark) |
 | `mark.svg` | `264 × 104` | Standalone mark (8px margin) |
 | `favicon.svg` | `128 × 128` | Square favicon mark with heavier stroke (`stroke-width: 14` at `0.5` scale) for 16–64px icons |
-| `badge-*.svg` | `var × 20` | Self-contained README status/posture badges (`python`, `storage`, `schemas`, `egress`, `license`) |
+| `badge-*.svg` | `var × 20` | Self-contained README status/posture badges (`python`, `pydantic`, `storage`, `uv`, `license`) |
 | `build_logo.py` | — | Regenerates all logo and badge SVGs (`python3 docs/logo/build_logo.py`) |
 
 ## Geometry & Palette

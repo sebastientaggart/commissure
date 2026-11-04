@@ -25,9 +25,9 @@ INK_D, ACC_D = "#e6edf3", "#ff7b3d"
 
 BADGES: tuple[tuple[str, str, str, str], ...] = (
     ("badge-python.svg", "python", "3.12+", "#3776ab"),
-    ("badge-storage.svg", "storage", "SQLite WAL · FTS5", "#0f80cc"),
-    ("badge-schemas.svg", "schemas", "Pydantic v2", "#d61f5a"),
-    ("badge-egress.svg", "egress", "offline by default", "#2b8a3e"),
+    ("badge-pydantic.svg", "pydantic", "v2", "#d61f5a"),
+    ("badge-storage.svg", "storage", "SQLite", "#0f80cc"),
+    ("badge-uv.svg", "uv", "managed", "#2b8a3e"),
     ("badge-license.svg", "license", "MIT", ACC),
 )
 
