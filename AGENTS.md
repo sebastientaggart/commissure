@@ -69,6 +69,7 @@ Recurring workflows live in `.agents/skills/<name>/SKILL.md` (with relative syml
 
 - Environment: `uv sync`
 - Tests: `uv run pytest` (single file/test: `uv run pytest tests/test_ingest.py::test_name`)
+  - Tests run in parallel by default (`-n auto` in `pyproject.toml`); add `-n0` to see `print` output or use `pdb`.
 - Lint & format: `uv run ruff check .` and `uv run ruff format --check .` (apply with `uv run ruff format .`)
 - A report may say "tests pass" only by naming the command it ran and its result.
 

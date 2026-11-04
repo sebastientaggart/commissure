@@ -61,6 +61,7 @@ commissure = "commissure.cli:app"
 [dependency-groups]
 dev = [
     "pytest>=9.1.1",
+    "pytest-xdist>=3.8.0",
     "ruff>=0.17.2",
 ]
 
@@ -89,7 +90,9 @@ norecursedirs = [
     "dist",
     ".*",
 ]
-addopts = "-ra --strict-markers"
+# Parallel by default (pytest-xdist, dev group): agents run the full suite often.
+# Debug one test with -n0 so print output and pdb work.
+addopts = "-ra --strict-markers -n auto"
 
 [tool.ruff]
 line-length = 100
