@@ -47,5 +47,7 @@ jobs:
       - name: Check third-party licenses
         run: uv run commissure licenses
 
+      # Serial on purpose: -n auto (4 workers) ran 259s and 335s here against 145s serial,
+      # though it is ~5x faster on a laptop. Likely disk contention; unmeasured.
       - name: Run test suite
-        run: uv run pytest tests
+        run: uv run pytest tests -n0
