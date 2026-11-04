@@ -21,10 +21,9 @@ Placeholder modules (`extract.py`, `analyze.py`, `deliver.py`) are not this step
    ```
 
     `solutions/<name>/` may already exist. If any scaffold file is present the command exits 2 and writes nothing: stop and report; do not write by hand. The `--json` `created` list is the file check.
-3. **Verify** from `solutions/<name>/` (the path the operator will use). Exit 2 is the pass:
+3. **Verify** against `solutions/<name>/` (the directory the operator will use). Exit 2 is the pass:
    ```bash
-    cd solutions/<name>
-    uv run commissure run --step extract --json
+    uv run --directory solutions/<name> commissure run --step extract --json
    ```
 
     Pass means exit 2, stderr contains `STAGES`, and `workspace/` is absent. Do not fill `STAGES` to make it pass.

@@ -76,14 +76,14 @@ until a split is clearly needed.
      staleness).
    - A stage’s `needs` may never include a run stage. If a later stage needs an aggregate,
      use a one-group group stage (`group_by` → `lambda _: "whole_corpus"`).
-4. **Iterate on a slice** from `solutions/<name>/`. If the workspace already has data,
+4. **Iterate on a slice** in `solutions/<name>/` (`uv run --directory solutions/<name>` when running from the repo root). If the workspace already has data,
    start with `inspect`, not a fresh ingest. Commands: `commissure/cli.py`. Typical loop:
    ```bash
-   uv run commissure run --step <stage> --limit 5 --json
-   uv run commissure inspect --run latest --stage <stage> --json
-   uv run commissure inspect --only-errors --limit 10 --json
-   uv run commissure inspect --subject <key_or_locator> --json
-   uv run commissure inspect --call <call_id> --json   # LLM: raw request + response
+   uv run --directory solutions/<name> commissure run --step <stage> --limit 5 --json
+   uv run --directory solutions/<name> commissure inspect --run latest --stage <stage> --json
+   uv run --directory solutions/<name> commissure inspect --only-errors --limit 10 --json
+   uv run --directory solutions/<name> commissure inspect --subject <key_or_locator> --json
+   uv run --directory solutions/<name> commissure inspect --call <call_id> --json   # LLM: raw request + response
    ```
    `--limit N` takes the first N pending subjects—also hit quarantine cases from
    `recipe/AGENTS.md` via `--subject` or a targeted fixture. Verify counts against
