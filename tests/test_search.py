@@ -214,6 +214,18 @@ def test_empty_query_is_not_match_all(parsed, ws_root, cli):
     assert result.exit_code == 2
 
 
+def test_malformed_fts_queries_raise_usage_error(parsed, ws_root, cli):
+    ws = open_workspace(ws_root)
+    try:
+        for bad in ("AND AND", '"unclosed', "no_such_col:term"):
+            with pytest.raises(SearchUsageError):
+                search(ws.conn, bad, phrase=False)
+    finally:
+        ws.close()
+    result = cli("search", '"unclosed', "--raw", "--workspace", str(ws_root), "--json")
+    assert result.exit_code == 2
+
+
 def test_search_from_a_worker_raises(parsed, ws_root):
     ws = open_workspace(ws_root)
     try:

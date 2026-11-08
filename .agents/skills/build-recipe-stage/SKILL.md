@@ -129,6 +129,9 @@ renders records and produces no outputs. Do not run `commissure run` for it.
 
 - Core owns the chrome; `render` returns a body fragment. Actions use `ActionContext` /
   `ActionError`; mask secrets; include the CSRF field on forms. Empty state looks empty.
+- A read-only form (a search box) is a GET form to `/`; `render` reads its fields from
+  `view.query` and answers with `view.search()`, `view.entities()`, `view.edges()`. Writes
+  stay POST actions. `view.query` is empty on any render after an action.
 - Put the mount in `recipe/interface.py` and `templates/interface.html.j2`, and test
   against the real HTTP server (CSRF, actions, layout). If core is missing a public helper,
   stop and propose it—do not call private `ctx._*` APIs.

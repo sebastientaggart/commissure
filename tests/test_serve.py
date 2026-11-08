@@ -1203,3 +1203,78 @@ INTERFACE = Interface(title="Graph Console", render=render_ui, actions={"seed": 
         expected = "hits=1:a.json topics=a,b unresolved=ref a,ref b about_a=1"
         assert f"action {expected}" in page
         assert f"render {expected}" in page
+
+
+def test_interface_render_reads_get_query_and_actions_render_without_it(tmp_path):
+    """`InterfaceView.query` carries the page request's GET parameters (last value per name);
+    a render after an action has none, so it cannot be mistaken for recipe state."""
+    sol = tmp_path / "solution"
+    recipe_dir = sol / "recipe"
+    recipe_dir.mkdir(parents=True)
+    (recipe_dir / "recipe.py").write_text(
+        """from __future__ import annotations
+
+import html
+from pydantic import BaseModel, ConfigDict
+
+from commissure.api import ActionContext, Interface, InterfaceView, Item, RunContext, Stage
+
+
+class Seen(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    locator: str
+
+
+def seen(ctx: RunContext, item: Item) -> Seen:
+    return Seen(locator=item.locator)
+
+
+def render_ui(view: InterfaceView) -> str:
+    q = view.query.get("q", "")
+    hits = [h.locator for h in view.search(q)] if q else []
+    return (
+        f'<p id="query">q=[{html.escape(q)}] keys={",".join(sorted(view.query))}'
+        f' hits={",".join(hits)}</p>'
+    )
+
+
+def noop(ctx: ActionContext, form) -> str:
+    ctx.ingest(ctx.solution_dir / "intake" / "seed", role="corpus")
+    ctx.run_pipeline()
+    return "done"
+
+
+STAGES = [Stage("seen", seen, schema=Seen, text="default")]
+
+INTERFACE = Interface(title="Query Console", render=render_ui, actions={"noop": noop})
+""",
+        encoding="utf-8",
+    )
+    seed_dir = sol / "intake" / "seed"
+    seed_dir.mkdir(parents=True)
+    (seed_dir / "a.json").write_text(json.dumps({"title": "alpha gamma"}), encoding="utf-8")
+    (seed_dir / "b.json").write_text(json.dumps({"title": "beta"}), encoding="utf-8")
+
+    ui_app = InterfaceApp(
+        sol / "workspace", recipe_dir, htmx_wait_seconds=FINISHED_RUN_WAIT_SECONDS
+    )
+    with _running_server(ui_app) as base_url:
+        _, _, bare = _http_request(f"{base_url}/")
+        assert "q=[] keys= hits=" in bare.decode("utf-8")
+
+        status, _, body = _http_request(
+            f"{base_url}/actions/noop", method="POST", form={"csrf_token": ui_app.csrf_token}
+        )
+        assert status == 200
+        assert "q=[] keys= hits=" in body.decode("utf-8")  # an action's render has no query
+
+        q = urllib.parse.urlencode([("q", "ignored"), ("q", "alpha gamma"), ("page", "2")])
+        status, _, body = _http_request(f"{base_url}/?{q}")
+        assert status == 200
+        page = body.decode("utf-8")
+        assert "q=[alpha gamma] keys=page,q hits=a.json" in page
+        assert count_external_resource_urls(page) == 0
+
+        # Escaped on the way out: a query string is untrusted input.
+        _, _, body = _http_request(f"{base_url}/?q=%3Cscript%3E")
+        assert "q=[&lt;script&gt;]" in body.decode("utf-8")

@@ -25,7 +25,7 @@ import time
 import urllib.parse
 from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from functools import partial
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -243,6 +243,10 @@ class InterfaceView(_CurrentQueries):
     steps: tuple[StepStatus, ...]
     busy: BusyStatus | None = None
     interrupted_step: str | None = None
+    # GET parameters of the page request (`/?q=...`), last value per name and without core's
+    # own `notice`, so a render can answer a read-only form such as a search. Empty on every
+    # other render (after an action, a poll swap): state a recipe needs must not live here.
+    query: Mapping[str, str] = field(default_factory=lambda: MappingProxyType({}))
     _recipe_name: str = field(repr=False, default="")
     _records_by_stage: Mapping[str, tuple[RecordInfo, ...]] = field(
         default_factory=dict, repr=False
@@ -2045,7 +2049,12 @@ class InterfaceApp:
                 try:
                     recipe = self._load_current_recipe()
                     notice_id = query.get("notice", [None])[-1]
-                    view = self._current_view(recipe)
+                    view = replace(
+                        self._current_view(recipe),
+                        query=MappingProxyType(
+                            {k: v[-1] for k, v in query.items() if k != "notice"}
+                        ),
+                    )
                     notice = self._pop_notice(notice_id)
                     if notice is None and not view.locked:
                         notice = self._pop_completed_notice()

@@ -209,7 +209,17 @@ def search(
         rows = conn.execute(sql, params).fetchall()
     except sqlite3.OperationalError as exc:
         msg = str(exc).lower()
-        if "fts5" in msg or "syntax" in msg or "match" in msg:
+        if any(
+            tok in msg
+            for tok in (
+                "fts5",
+                "syntax",
+                "match",
+                "unterminated",
+                "no such column",
+                "unknown special query",
+            )
+        ):
             raise SearchUsageError(f"invalid FTS query: {exc}") from exc
         raise
 

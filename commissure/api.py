@@ -19,7 +19,8 @@ locator, page, and OCR trust when the record is stored (`commissure/evidence.py`
 Beside a payload, `RecordEnvelope.valid(payload, entities=..., edges=...)` emits graph
 rows (`EntitySpec`, `EdgeSpec`) that core indexes against the outcome; `ctx.entities`,
 `ctx.edges`, and `ctx.search` (and the same on `InterfaceView` and `ActionContext`)
-read the current snapshot (`commissure/graph.py`).
+read the current snapshot (`commissure/graph.py`). `InterfaceView.query` holds the GET
+parameters of the page request, so a render can answer a read-only form (a search box).
 """
 
 from commissure.chunk import (
