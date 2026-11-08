@@ -1,0 +1,14 @@
+{
+  "Program Instruction PI-00-01 _ Example Agency.html": {
+    "html": {
+      "outcome": "valid",
+      "reason_code": null
+    }
+  },
+  "legacy.htm": {
+    "html": {
+      "outcome": "warning",
+      "reason_code": "content_root_body,encoding_fallback"
+    }
+  }
+}

@@ -1,0 +1,185 @@
+{
+  "text_hash": "38d310c356cd4a568110f6cd4374554ff8e9d897ca04b1b7d460845ce3918646",
+  "outcome": "valid",
+  "reason_code": null,
+  "diagnostics": [],
+  "structure": {
+    "blocks": [
+      {
+        "kind": "heading",
+        "start": 0,
+        "end": 28,
+        "level": 1,
+        "status": "readable"
+      },
+      {
+        "kind": "paragraph",
+        "start": 30,
+        "end": 50,
+        "heading_path": [
+          "Program Instruction PI-00-01"
+        ],
+        "status": "readable"
+      },
+      {
+        "kind": "paragraph",
+        "start": 52,
+        "end": 77,
+        "heading_path": [
+          "Program Instruction PI-00-01"
+        ],
+        "status": "readable"
+      },
+      {
+        "kind": "paragraph",
+        "start": 79,
+        "end": 107,
+        "heading_path": [
+          "Program Instruction PI-00-01"
+        ],
+        "status": "readable"
+      },
+      {
+        "kind": "heading",
+        "start": 109,
+        "end": 120,
+        "level": 2,
+        "heading_path": [
+          "Program Instruction PI-00-01"
+        ],
+        "status": "readable"
+      },
+      {
+        "kind": "paragraph",
+        "start": 122,
+        "end": 180,
+        "heading_path": [
+          "Program Instruction PI-00-01",
+          "Instruction"
+        ],
+        "status": "readable"
+      },
+      {
+        "kind": "paragraph",
+        "start": 182,
+        "end": 232,
+        "heading_path": [
+          "Program Instruction PI-00-01",
+          "Instruction"
+        ],
+        "status": "readable"
+      },
+      {
+        "kind": "paragraph",
+        "start": 234,
+        "end": 248,
+        "heading_path": [
+          "Program Instruction PI-00-01",
+          "Instruction"
+        ],
+        "status": "readable"
+      },
+      {
+        "kind": "paragraph",
+        "start": 250,
+        "end": 266,
+        "heading_path": [
+          "Program Instruction PI-00-01",
+          "Instruction"
+        ],
+        "status": "readable"
+      },
+      {
+        "kind": "paragraph",
+        "start": 268,
+        "end": 281,
+        "heading_path": [
+          "Program Instruction PI-00-01",
+          "Instruction"
+        ],
+        "status": "readable"
+      },
+      {
+        "kind": "paragraph",
+        "start": 283,
+        "end": 298,
+        "heading_path": [
+          "Program Instruction PI-00-01",
+          "Instruction"
+        ],
+        "status": "readable"
+      },
+      {
+        "kind": "heading",
+        "start": 300,
+        "end": 313,
+        "level": 3,
+        "heading_path": [
+          "Program Instruction PI-00-01",
+          "Instruction"
+        ],
+        "status": "readable"
+      },
+      {
+        "kind": "table",
+        "start": 315,
+        "end": 382,
+        "heading_path": [
+          "Program Instruction PI-00-01",
+          "Instruction",
+          "Funding table"
+        ],
+        "table": 0,
+        "status": "readable"
+      },
+      {
+        "kind": "paragraph",
+        "start": 384,
+        "end": 411,
+        "heading_path": [
+          "Program Instruction PI-00-01",
+          "Instruction",
+          "Funding table"
+        ],
+        "status": "readable"
+      }
+    ],
+    "tables": [
+      {
+        "heading_path": [
+          "Program Instruction PI-00-01",
+          "Instruction",
+          "Funding table"
+        ],
+        "rows": [
+          [
+            "Program",
+            "Amount (FY / total)",
+            null
+          ],
+          [
+            "Preschool",
+            "2000",
+            "$1,000"
+          ],
+          [
+            "Infant",
+            "2000",
+            "$500"
+          ]
+        ]
+      }
+    ],
+    "metadata": {
+      "title": "Program Instruction PI-00-01 | Example Agency",
+      "description": "Reporting instructions for grant recipients.",
+      "canonical": "https://agency.example.gov/policy/pi-00-01",
+      "lang": "en",
+      "encoding": "utf-8",
+      "content_root": "main",
+      "dropped": {
+        "hidden": 1
+      }
+    }
+  }
+}

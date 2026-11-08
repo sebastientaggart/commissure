@@ -1,0 +1,32 @@
+Program Instruction PI-00-01
+
+Log Number: PI-00-01
+
+Issuance Date: 01/15/2000
+
+Key Words: Reporting; Grants
+
+Instruction
+
+Grant recipients must submit the annual report by March 1.
+
+Questions go to:
+Office of Programs
+Example Agency
+
+Financial data
+
+Quarterly totals
+
+Annual totals
+
+Enrollment data
+
+Funding table
+
+Program	Amount (FY / total)	
+Preschool	2000	$1,000
+Infant	2000	$500
+
+Sincerely,
+Program Director

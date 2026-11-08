@@ -21,7 +21,7 @@ When an operational cycle finishes, its workspace remains a self-contained archi
 
 ## 2. Source Identity vs. Tool Drift
 
-The unit of input in core is an **Item**—a PDF, DOCX, XLSX workbook, CSV, JSON document, or structured row—tracked across time without conflating upstream source edits with local parser changes:
+The unit of input in core is an **Item**—a PDF, DOCX, XLSX workbook, CSV, JSON document, HTML page, or structured row—tracked across time without conflating upstream source edits with local parser changes:
 
 - **`(source, locator)` → `item_version`:** Each ingested file or object is mapped to append-only `item_version` rows recording `bytes_hash`, `size_bytes`, `role`, `run_id`, explicit `predecessor`, and `tombstone` on removal.
 - **`(item_version, parser, parser_version)` → `extracted_text`:** Parsed text and structural metadata (`blocks`, `tables`, `metadata`) are stored per parser and computed parser version, and indexed in SQLite FTS5 for phrase and boolean search without a model call.
@@ -40,7 +40,7 @@ Before any recipe stage runs, Commissure evaluates whether each input file can a
   - A scanned page with a short Bates stamp on top is rejected as `image_dominant`.
   - Pages that fail the gate are recorded with machine-readable reasons and never passed downstream as text.
   - Undecodable glyphs on otherwise readable pages become `U+FFFD` (`\ufffd`) with an `unmapped_glyphs` diagnostic—never raw `(cid:N)` strings or control bytes.
-- **Fast default parsers + opt-in `ocr`:** `commissure run --step parse` runs the default parsers (`pdfplumber`, `docx`, `xlsx`, `csv`, `json`) in a bounded local process pool. Running `commissure run --step parse --parser ocr` invokes a locally installed Tesseract binary on pages the gate rejected, emitting `warning` text with per-page `ocr` flags, orientation detection (`ocr_rotated_180`), and confidence scores. Stages opt into OCR text explicitly via `Stage(..., text=("ocr", "default"))`.
+- **Fast default parsers + opt-in `ocr`:** `commissure run --step parse` runs the default parsers (`pdfplumber`, `docx`, `xlsx`, `csv`, `json`, `html`) in a bounded local process pool. The `html` parser (standard library) reads one content root (`<main>`, else a single `<article>`, else `<body>` with `content_root_body`), drops navigation, scripts, forms, and hidden elements inside it (counted in `metadata.dropped`), and decodes by byte-order mark, declared charset, then UTF-8 (`encoding_fallback` when it falls back to Windows-1252). Running `commissure run --step parse --parser ocr` invokes a locally installed Tesseract binary on pages the gate rejected, emitting `warning` text with per-page `ocr` flags, orientation detection (`ocr_rotated_180`), and confidence scores. Stages opt into OCR text explicitly via `Stage(..., text=("ocr", "default"))`.
 
 ---
 
