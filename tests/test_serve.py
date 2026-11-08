@@ -1118,3 +1118,88 @@ def test_set_status_without_counts_clears_previous_phase_counts(tmp_path):
     _busy, label, _elapsed, done, total = ui_app._snapshot_in_process_activity()
     assert label == "Running: ingest (comment)"
     assert (done, total) == (None, None)
+
+
+def test_interface_render_and_action_query_search_entities_and_edges(tmp_path):
+    """`InterfaceView` and `ActionContext` read the current graph and FTS5 text."""
+    sol = tmp_path / "solution"
+    recipe_dir = sol / "recipe"
+    recipe_dir.mkdir(parents=True)
+    (recipe_dir / "recipe.py").write_text(
+        """from __future__ import annotations
+
+import html
+from pydantic import BaseModel, ConfigDict
+
+from commissure.api import (
+    ActionContext, EdgeSpec, EntitySpec, Interface, InterfaceView, Item, RecordEnvelope,
+    RunContext, Stage,
+)
+
+
+class Tagged(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    locator: str
+
+
+def tag(ctx: RunContext, item: Item):
+    stem = item.locator.rsplit(".", 1)[0]
+    return RecordEnvelope.valid(
+        Tagged(locator=item.locator),
+        entities=[EntitySpec(kind="topic", key=stem)],
+        edges=[
+            EdgeSpec(kind="about", source_item_key=item.key, target_entity_key=("topic", stem)),
+            EdgeSpec(kind="cites", source_item_key=item.key, target_unresolved=f"ref {stem}"),
+        ],
+    )
+
+
+def describe(view) -> str:
+    hits = view.search("alpha")
+    topics = sorted(e.key for e in view.entities(kind="topic"))
+    unresolved = sorted(e.target_unresolved for e in view.edges(kind="cites"))
+    about_a = view.edges(target_key=("topic", "a"))
+    return (
+        f"hits={len(hits)}:{','.join(h.locator for h in hits)}"
+        f" topics={','.join(topics)} unresolved={','.join(unresolved)}"
+        f" about_a={len(about_a)}"
+    )
+
+
+def render_ui(view: InterfaceView) -> str:
+    return f'<p id="graph">render {html.escape(describe(view))}</p>'
+
+
+def seed(ctx: ActionContext, form) -> str:
+    ctx.ingest(ctx.solution_dir / "intake" / "seed", role="corpus")
+    ctx.run_pipeline()
+    return f"action {describe(ctx)}"
+
+
+STAGES = [Stage("tag", tag, schema=Tagged, text="default")]
+
+INTERFACE = Interface(title="Graph Console", render=render_ui, actions={"seed": seed})
+""",
+        encoding="utf-8",
+    )
+    seed_dir = sol / "intake" / "seed"
+    seed_dir.mkdir(parents=True)
+    (seed_dir / "a.json").write_text(json.dumps({"title": "alpha"}), encoding="utf-8")
+    (seed_dir / "b.json").write_text(json.dumps({"title": "beta"}), encoding="utf-8")
+
+    ui_app = InterfaceApp(
+        sol / "workspace", recipe_dir, htmx_wait_seconds=FINISHED_RUN_WAIT_SECONDS
+    )
+    with _running_server(ui_app) as base_url:
+        # Before any workspace exists the queries return nothing rather than failing.
+        _, _, empty = _http_request(f"{base_url}/")
+        assert "render hits=0: topics= unresolved= about_a=0" in empty.decode("utf-8")
+
+        status, _, body = _http_request(
+            f"{base_url}/actions/seed", method="POST", form={"csrf_token": ui_app.csrf_token}
+        )
+        assert status == 200
+        page = body.decode("utf-8")
+        expected = "hits=1:a.json topics=a,b unresolved=ref a,ref b about_a=1"
+        assert f"action {expected}" in page
+        assert f"render {expected}" in page

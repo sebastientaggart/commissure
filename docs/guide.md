@@ -190,6 +190,22 @@ uv run commissure search "budget AND (personnel OR fringe)" --raw --parser ocr -
 
 Hits return locator, parser, page, and character offsets. Stages can also call `ctx.search(...)` on the main thread.
 
+### Entities and Edges (graph)
+A stage emits graph rows beside its payload; core indexes them against the outcome, so only the current snapshot shows and a rerun supersedes it:
+
+```python
+return RecordEnvelope.valid(
+    payload,
+    entities=[EntitySpec(kind="topic", key="budget")],
+    edges=[
+        EdgeSpec(kind="about", source_item_key=item.key, target_entity_key=("topic", "budget")),
+        EdgeSpec(kind="cites", source_item_key=item.key, target_unresolved="ref 12(b)"),
+    ],
+)
+```
+
+An entity endpoint must name an entity in the same envelope; provenance (`item_version_ids`) must name item versions the subject owns (item stages default to their own). Either mistake fails the run. Read the current graph with `ctx.entities(...)` / `ctx.edges(...)` (main thread), or `view.entities(...)`, `view.edges(...)`, and `view.search(...)` in an `INTERFACE` render or action. `commissure inspect` summarizes current entities and edges per stage and kind.
+
 ### Reviewing Results (`commissure review` & `commissure serve`)
 Measures empirical accuracy on stage checks and parse page checks (`parse:unreadable_pages`, `parse:ocr_pages`):
 

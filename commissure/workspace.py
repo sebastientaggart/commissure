@@ -782,6 +782,48 @@ MIGRATIONS: list[str] = [
     CREATE TRIGGER verdicts_append_only_d BEFORE DELETE ON verdicts
         BEGIN SELECT RAISE(ABORT, 'review records are append-only'); END;
     """,
+    # 8: the graph (commissure/graph.py). Entities and edges belong to the outcome that
+    # emitted them, like records and evidence, so the current views follow the same
+    # snapshot rules as current_outcomes and a rerun supersedes what it replaced. The
+    # column is nullable only because ALTER TABLE cannot add NOT NULL; core writes it on
+    # every row, and a row without it never appears in a current view.
+    """
+    ALTER TABLE entities ADD COLUMN outcome_id INTEGER REFERENCES outcomes (id);
+    ALTER TABLE edges ADD COLUMN outcome_id INTEGER REFERENCES outcomes (id);
+    CREATE INDEX entities_outcome ON entities (outcome_id);
+    CREATE INDEX entities_kind_key ON entities (kind, json_extract(attributes, '$.key'));
+    CREATE INDEX edges_outcome ON edges (outcome_id);
+    CREATE INDEX entity_provenance_version ON entity_provenance (item_version_id);
+    CREATE INDEX edge_provenance_version ON edge_provenance (item_version_id);
+
+    CREATE VIEW current_entities AS
+    SELECT e.id AS entity_id, e.kind, json_extract(e.attributes, '$.key') AS key,
+           e.attributes, co.outcome_id, co.run_id, co.stage, co.subject_kind,
+           co.subject_key, co.outcome, co.version_stale, co.code_stale, co.params_stale,
+           co.input_stale
+    FROM current_outcomes co
+    JOIN entities e ON e.outcome_id = co.outcome_id;
+
+    -- Entity endpoints are shown by (kind, key), item endpoints by 'item:<id>', so a
+    -- caller joins across outcomes by natural key rather than by row id.
+    CREATE VIEW current_edges AS
+    SELECT g.id AS edge_id, g.kind,
+           se.kind AS source_entity_kind, json_extract(se.attributes, '$.key')
+               AS source_entity_key,
+           CASE WHEN g.source_item_id IS NOT NULL THEN 'item:' || g.source_item_id END
+               AS source_item_key,
+           te.kind AS target_entity_kind, json_extract(te.attributes, '$.key')
+               AS target_entity_key,
+           CASE WHEN g.target_item_id IS NOT NULL THEN 'item:' || g.target_item_id END
+               AS target_item_key,
+           g.target_unresolved, g.weight, g.evidence,
+           co.outcome_id, co.run_id, co.stage, co.subject_kind, co.subject_key, co.outcome,
+           co.version_stale, co.code_stale, co.params_stale, co.input_stale
+    FROM current_outcomes co
+    JOIN edges g ON g.outcome_id = co.outcome_id
+    LEFT JOIN entities se ON se.id = g.source_entity_id
+    LEFT JOIN entities te ON te.id = g.target_entity_id;
+    """,
 ]
 
 

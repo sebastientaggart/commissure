@@ -194,6 +194,7 @@ def inspect_workspace(
             "runs": runs,
             "latest_runs": _runs(conn, "latest_runs"),
             "outcomes": outcomes,
+            "graph": [r for r in _graph(conn) if _stage_matches(r["stage"], stage)],
             "drift": _drift(conn),
             "issues": issues,
             "llm_calls_by_run": llm_by_run,
@@ -231,7 +232,8 @@ def render(report: dict[str, Any], console: Console) -> None:
         console.print(
             f"{counts['sources']} sources, {counts['current_items']} current items, "
             f"{counts['item_versions']} versions, {counts['tombstones']} tombstones, "
-            f"{counts['entities']} entities, {counts['edges']} edges"
+            f"{counts['current_entities']} current entities ({counts['entities']} stored), "
+            f"{counts['current_edges']} current edges ({counts['edges']} stored)"
         )
         if counts["by_role"]:
             roles = Table("role", "current items", title="Items by role", title_justify="left")
@@ -270,6 +272,15 @@ def render(report: dict[str, Any], console: Console) -> None:
                     row["input_stale"],
                 ]
                 for row in ws["outcomes"]
+            ],
+        )
+        _table(
+            console,
+            "Current graph",
+            ["stage", "table", "kind", "n", "unresolved", "stale"],
+            [
+                [row["stage"], row["table"], row["kind"], row["n"], row["unresolved"], row["stale"]]
+                for row in ws["graph"]
             ],
         )
         _table(
@@ -559,7 +570,9 @@ def _counts(conn: sqlite3.Connection) -> dict[str, Any]:
             (SELECT count(*) FROM item_versions) AS item_versions,
             (SELECT count(*) FROM item_versions WHERE tombstone = 1) AS tombstones,
             (SELECT count(*) FROM entities) AS entities,
-            (SELECT count(*) FROM edges) AS edges
+            (SELECT count(*) FROM edges) AS edges,
+            (SELECT count(*) FROM current_entities) AS current_entities,
+            (SELECT count(*) FROM current_edges) AS current_edges
         """
     ).fetchone()
     by_role = {
@@ -595,6 +608,24 @@ def _outcomes(conn: sqlite3.Connection) -> list[dict[str, Any]]:
         FROM current_outcomes
         GROUP BY stage, outcome
         ORDER BY stage, outcome
+        """
+    ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def _graph(conn: sqlite3.Connection) -> list[dict[str, Any]]:
+    """Current entities and edges per (stage, kind); `unresolved` counts edge targets
+    kept as raw text, `stale` rows whose emitting outcome is stale for any reason."""
+    stale = "sum(version_stale OR code_stale OR params_stale OR input_stale)"
+    rows = conn.execute(
+        f"""
+        SELECT stage, 'entity' AS "table", kind, count(*) AS n, NULL AS unresolved,
+               {stale} AS stale
+        FROM current_entities GROUP BY stage, kind
+        UNION ALL
+        SELECT stage, 'edge', kind, count(*), count(target_unresolved), {stale}
+        FROM current_edges GROUP BY stage, kind
+        ORDER BY stage, "table" DESC, kind
         """
     ).fetchall()
     return [dict(row) for row in rows]

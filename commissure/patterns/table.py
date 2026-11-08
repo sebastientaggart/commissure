@@ -8,17 +8,86 @@ plausible default. A non-zero ``page_external_resource_count`` refuses both file
 from __future__ import annotations
 
 import csv
+import hashlib
 import io
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from pydantic import BaseModel, ConfigDict
+
 from commissure.deliver.html import page_external_resource_count, render_page
 
 _TEMPLATE_DIR = Path(__file__).resolve().parent / "templates"
 _TEMPLATE = "record_table.html.j2"
 _CELL_TYPES = (str, int, float, bool, type(None))
+
+
+class OutputFile(BaseModel):
+    """Verified metadata for one deliverable file written under ``ctx.outputs``."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    path: str
+    sha256: str
+    size_bytes: int
+    row_count: int | None = None
+
+
+def verify_output_file(
+    path: Path,
+    outputs_root: Path,
+    *,
+    row_count: int | None = None,
+) -> OutputFile:
+    """Verify that ``path`` exists inside ``outputs_root`` with non-zero bytes and hash it."""
+    if row_count is not None and row_count < 0:
+        raise ValueError(f"row_count must be non-negative, got {row_count}")
+    try:
+        rel = path.resolve().relative_to(outputs_root.resolve()).as_posix()
+    except ValueError as exc:
+        raise ValueError(f"output {path} is outside outputs_root {outputs_root}") from exc
+    if not path.is_file() or path.stat().st_size == 0:
+        raise RuntimeError(f"output {rel} is missing or empty")
+    data = path.read_bytes()
+    return OutputFile(
+        path=rel,
+        sha256=hashlib.sha256(data).hexdigest(),
+        size_bytes=len(data),
+        row_count=row_count,
+    )
+
+
+def write_verified_csv(
+    path: Path,
+    outputs_root: Path,
+    headers: Sequence[str],
+    rows: Sequence[Sequence[Any]],
+) -> OutputFile:
+    """Write ``headers`` and ``rows`` to ``path`` and verify size and parsed row count."""
+    if not headers:
+        raise ValueError("headers must not be empty")
+    try:
+        path.resolve().relative_to(outputs_root.resolve())
+    except ValueError as exc:
+        raise ValueError(f"output {path} is outside outputs_root {outputs_root}") from exc
+    width = len(headers)
+    for idx, row in enumerate(rows):
+        if len(row) != width:
+            raise ValueError(f"row {idx} has {len(row)} cells, expected {width} headers")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    buf = io.StringIO()
+    writer = csv.writer(buf, lineterminator="\n")
+    writer.writerow(headers)
+    writer.writerows(rows)
+    path.write_text(buf.getvalue(), encoding="utf-8")
+
+    with path.open(encoding="utf-8", newline="") as f:
+        data_rows = sum(1 for _ in csv.reader(f)) - 1
+    if data_rows != len(rows):
+        raise RuntimeError(f"CSV row count {data_rows} does not match {len(rows)} input row(s)")
+    return verify_output_file(path, outputs_root, row_count=data_rows)
 
 
 @dataclass(frozen=True)

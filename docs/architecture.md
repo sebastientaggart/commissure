@@ -26,7 +26,7 @@ The unit of input in core is an **Item**—a PDF, DOCX, XLSX workbook, CSV, JSON
 - **`(source, locator)` → `item_version`:** Each ingested file or object is mapped to append-only `item_version` rows recording `bytes_hash`, `size_bytes`, `role`, `run_id`, explicit `predecessor`, and `tombstone` on removal.
 - **`(item_version, parser, parser_version)` → `extracted_text`:** Parsed text and structural metadata (`blocks`, `tables`, `metadata`) are stored per parser and computed parser version, and indexed in SQLite FTS5 for phrase and boolean search without a model call.
 - **Drift classification:** `text_hash` is compared only under the same parser and `parser_version`. If a file's `bytes_hash` changes (for example, a PDF title property is touched) while its `text_hash` under the same parser stays identical, ingest/parse classifies the change as `metadata_only` rather than content drift. Upgrading a parser writes new `extracted_text` rows without misattributing the difference to the upstream source.
-- **Generic graph tables (`entities` and `edges`):** Core owns the table shapes and item-level provenance; recipes own domain meaning and populate them during analysis stages.
+- **Generic graph tables (`entities` and `edges`):** Core owns the table shapes and item-level provenance; recipes own domain meaning and emit `EntitySpec` / `EdgeSpec` beside a payload in `RecordEnvelope`. Core (`commissure/graph.py`) checks provenance and endpoints and keys every row to its outcome, so `current_entities` and `current_edges` follow `current_outcomes` snapshot rules.
 
 ---
 

@@ -40,6 +40,8 @@ def test_unmeasured_run_signals_stay_null(cli, ws_root, source):
         "tombstones": 0,
         "entities": 0,
         "edges": 0,
+        "current_entities": 0,
+        "current_edges": 0,
         "by_role": {"corpus": 4},
     }
     assert ws["drift"] == [{"change": "added", "change_kind": None, "n": 4}]

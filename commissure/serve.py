@@ -37,6 +37,7 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 from markupsafe import Markup, escape
 from pydantic import BaseModel, ValidationError
 
+from commissure import graph
 from commissure.deliver.html import (
     _INLINE_BRAND,
     STATIC_DIR,
@@ -47,6 +48,7 @@ from commissure.deliver.html import (
 from commissure.deliver.html import (
     DEFAULT_PAGE_FOOTER as DEFAULT_INTERFACE_FOOTER,
 )
+from commissure.graph import EdgeRow, EntityRow
 from commissure.ingest import check_folder_source, effective_ignore, ingest_folder
 from commissure.inspect import open_readonly
 from commissure.limits import Limits, is_limit_quarantine_stale, resolve_limits
@@ -68,6 +70,7 @@ from commissure.recipes import (
 )
 from commissure.review_page import ReviewPages
 from commissure.runner import RunCancelled, reap_abandoned, run_plan
+from commissure.search import Hit, search
 from commissure.workspace import (
     DB_NAME,
     LOCK_NAME,
@@ -185,8 +188,50 @@ class BusyStatus:
     tab_title_prefix: str = "[Running…]"
 
 
+class _CurrentQueries:
+    """Read-only queries over the current snapshot, for `InterfaceView` and `ActionContext`.
+
+    Each call opens its own read-only connection, so it sees steps an action just ran.
+    """
+
+    workspace_root: Path
+
+    def search(
+        self, query: str, *, parser: str | None = None, limit: int = 20, phrase: bool = True
+    ) -> list[Hit]:
+        """Keyword/phrase search over current parsed text (`commissure.search.search`)."""
+        return _read_current(
+            self.workspace_root,
+            lambda c: search(c, query, parser=parser, limit=limit, phrase=phrase),
+        )
+
+    def entities(self, *, kind: str | None = None, key: str | None = None) -> list[EntityRow]:
+        """Current entities (`commissure.graph.entities`)."""
+        return _read_current(self.workspace_root, lambda c: graph.entities(c, kind=kind, key=key))
+
+    def edges(
+        self,
+        *,
+        kind: str | None = None,
+        source_key: tuple[str, str] | str | None = None,
+        target_key: tuple[str, str] | str | None = None,
+        target_unresolved: str | None = None,
+    ) -> list[EdgeRow]:
+        """Current edges (`commissure.graph.edges`)."""
+        return _read_current(
+            self.workspace_root,
+            lambda c: graph.edges(
+                c,
+                kind=kind,
+                source_key=source_key,
+                target_key=target_key,
+                target_unresolved=target_unresolved,
+            ),
+        )
+
+
 @dataclass(frozen=True)
-class InterfaceView:
+class InterfaceView(_CurrentQueries):
     workspace_root: Path
     recipe_path: Path
     solution_dir: Path
@@ -908,6 +953,24 @@ def _open_current(db_path: Path) -> sqlite3.Connection:
     return conn
 
 
+def _read_current[T](
+    workspace_root: Path, query: Callable[[sqlite3.Connection], list[T]]
+) -> list[T]:
+    """Run `query` on a short-lived read-only connection; no workspace yet means no rows.
+
+    The view is built from a connection that is closed before render, so each query
+    opens its own; WAL lets it read while a run holds the workspace lock.
+    """
+    db_path = workspace_root / DB_NAME
+    if not db_path.is_file():
+        return []
+    conn = _open_current(db_path)
+    try:
+        return query(conn)
+    finally:
+        conn.close()
+
+
 def build_view(
     workspace_root: Path,
     recipe: Recipe,
@@ -1145,7 +1208,7 @@ def build_view(
         conn.close()
 
 
-class ActionContext:
+class ActionContext(_CurrentQueries):
     """In-process execution context passed to `Interface.actions` handlers."""
 
     def __init__(
