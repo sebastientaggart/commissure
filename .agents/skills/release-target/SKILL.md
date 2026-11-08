@@ -38,7 +38,7 @@ judgment around them. Root `AGENTS.md` section 6 (Delivery) is the rule set and 
   releases). No internal names, rule numbers, file paths, other solutions or offices, or
   analyst questions.
 - **`release.toml`**: update `summary`, `usage`, `include`, `exclude`, or `extras` if
-  commands, shipped files, or optional dependencies changed.
+  commands, shipped files, or optional dependencies changed (`docs/user-guide.md` ships and is linked from the README by default when present; keep `usage` as a short quick-start that matches it).
 
 Show the proposal and wait for approval. Then edit `release.toml` and `CHANGELOG.md`, and
 have the operator commit (or get explicit confirmation before running `git commit`), since

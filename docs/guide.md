@@ -75,13 +75,7 @@ def extract(ctx: RunContext, item: Item) -> Report | RecordEnvelope[Report]:
     return Report(
         workstream=workstream.strip(),
         summary=summary.strip(),
-        evidence=Evidence.from_item(
-            item,
-            kind="summary_span",
-            text=item.text[span_start:span_end],
-            start=span_start,
-            end=span_end,
-        ),
+        evidence=Evidence.span(item, span_start, span_end, kind="summary_span"),
     )
 ```
 
@@ -123,10 +117,10 @@ STAGES = [
 Every command supports `--json` for structured agent consumption. `commissure run` writes live progress to `stderr` when it is a terminal (`--progress` / `--no-progress` override), so cron runs stay quiet. When invoked inside `solutions/<name>/`, `--recipe` and `--workspace` default to `./recipe` and `./workspace`.
 
 Deterministic exit codes apply across all commands:
-- `0` — Succeeded (or clean `noop` when all items are unchanged)
-- `1` — Run or gate failed
-- `2` — Usage, configuration, or recipe validation error
-- `3` — Workspace is locked by another writer
+- `0`: Succeeded (or clean `noop` when all items are unchanged)
+- `1`: Run or gate failed
+- `2`: Usage, configuration, or recipe validation error
+- `3`: Workspace is locked by another writer
 
 ### Step-by-Step Pipeline Execution
 
@@ -223,7 +217,7 @@ uv run commissure review next
 uv run commissure review record 12 correct --reviewer alice --note "Matches table row 3"
 
 # Record an ad-hoc spot check (logged, never counted in sample error rates)
-uv run commissure review spot --subject item:26 --check extract:/evidence wrong --reviewer alice
+uv run commissure review spot --subject item:26 --check extract:/evidence --pointer /evidence
 
 # View sample error rates and Wilson 95% confidence intervals
 uv run commissure review report --json
@@ -241,22 +235,15 @@ Opening `/review` in the browser provides the full sampling and grading workflow
 
 ## 4. Working with Coding Agents
 
-Commissure ships agent instructions and workflows as versioned files in the repository:
-- [`AGENTS.md`](../AGENTS.md) holds the global invariants.
-- [`.agents/skills/`](../.agents/skills/) holds four task-specific workflows (with relative symlinks in `.claude/skills/` for Claude Code):
-
-1. **`new-solution`** (agent): Runs `commissure init solutions/<name>`, hands off a checklist of what to populate in `intake/` and `docs/`, and stops.
-2. **Operator populates:** Places a representative batch of inputs in `intake/<batch>/` and reference notes in `docs/` (indexed in `docs/README.md`).
-3. **`investigate-solution`** (agent): Reads `docs/README.md` and all notes, runs `probe`, ingests and parses into a `/tmp` scratch workspace (including `--parser ocr` when needed), runs `recon`, completes `recipe/AGENTS.md`, and stops for review before writing stage code.
-4. **`build-recipe-stage`** (agent): Implements one stage, deliverable, or `INTERFACE` at a time—strict schema first, deterministic extraction second, `ctx.llm` for residue only—iterating with `--limit N --json` and writing proven-to-fail tests in `solutions/<name>/tests/`.
+See [`docs/solutions.md`](solutions.md) for the step-by-step solution lifecycle (`new-solution`, `investigate-solution`, `build-recipe-stage`, `release-target`), operator vs. agent responsibilities, `recipe/tools/` fetchers, `intake/` curation, and roles.
 
 ---
 
 ## 5. Delivering to Clients (`commissure release`)
 
-Clients who run a solution as an appliance receive a generated single-solution release repository or tarball—never the development repository, `intake/`, `workspace/`, or internal `docs/`:
+Clients who run a solution as an appliance receive a generated single-solution release repository or tarball, never the development repository, `intake/`, `workspace/`, or internal `docs/`:
 
-- `solutions/<name>/release.toml` declares the solution's `version`, allowlisted paths (default `recipe/` and `CHANGELOG.md`), optional extras (`extras = ["docx"]`), and client usage instructions.
+- `solutions/<name>/release.toml` declares the solution's `version`, allowlisted paths (default `recipe/`, `CHANGELOG.md`, and `docs/user-guide.md` when present, linked from the generated `README.md`), optional extras (`extras = ["docx"]`), and a short quick-start `usage`.
 - `solutions/<name>/releases/<target>.toml` configures a specific client destination (`title`, optional git `remote`, `tarball = true`, and target-specific `forbid` regexes).
 
 ```sh

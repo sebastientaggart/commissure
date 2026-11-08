@@ -322,6 +322,48 @@ def test_missing_changelog_entry_or_include_is_refused(mono):
         release.build(root, "client", dest=dest, wheel=wheel, **OPTS)
 
 
+def test_user_guide_ships_by_default_is_linked_and_is_scanned(mono):
+    """When docs/user-guide.md exists, it ships without editing release.toml, is linked from
+    the generated README, is covered by leak and TODO scans, and cannot be contradicted by usage."""
+    root, wheel, dest = mono
+    sol = root / "solutions" / "alpha"
+    guide = sol / "docs" / "user-guide.md"
+
+    write(guide, "# User guide\n\nTODO: fill in.\n")
+    with pytest.raises(release.ReleaseError, match="user-guide.md.*TODO"):
+        release.build(root, "client", dest=dest, wheel=wheel, **OPTS)
+
+    write(guide, "# User guide\n\nLeak: /Users/alice/secret\n")
+    with pytest.raises(release.ReleaseError, match=r"solutions/alpha/docs/user-guide\.md:3"):
+        release.build(root, "client", dest=dest, wheel=wheel, **OPTS)
+
+    write(
+        guide,
+        "# User guide\n\n"
+        "uv run commissure run --step ingest --source intake/corpus --role policy\n",
+    )
+    write(
+        sol / "release.toml",
+        'version = "0.1.0"\nsummary = "Alpha."\n'
+        'usage = "uv run commissure run --step ingest --source intake/wrong --role policy"\n'
+        'exclude = ["recipe/AGENTS.md"]\n',
+    )
+    with pytest.raises(release.ReleaseError, match="intake/wrong"):
+        release.build(root, "client", dest=dest, wheel=wheel, **OPTS)
+
+    write(
+        sol / "release.toml",
+        'version = "0.1.0"\nsummary = "Alpha."\n'
+        'usage = "uv run commissure run --step ingest --source intake/corpus --role policy"\n'
+        'exclude = ["recipe/AGENTS.md"]\n',
+    )
+    out, version = release.build(root, "client", dest=dest, wheel=wheel, **OPTS)
+    assert version == "0.1.0"
+    assert "solutions/alpha/docs/user-guide.md" in shipped(out)
+    assert "solutions/alpha/docs/findings.md" not in shipped(out)
+    assert "solutions/alpha/docs/user-guide.md" in (out / "README.md").read_text()
+
+
 @pytest.mark.skipif(
     os.environ.get("COMMISSURE_RELEASE_INTEGRATION") != "1",
     reason="set COMMISSURE_RELEASE_INTEGRATION=1 to build and install a real release",
