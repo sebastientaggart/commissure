@@ -204,7 +204,7 @@ return RecordEnvelope.valid(
 )
 ```
 
-An entity endpoint must name an entity in the same envelope; provenance (`item_version_ids`) must name item versions the subject owns (item stages default to their own). Either mistake fails the run. Read the current graph with `ctx.entities(...)` / `ctx.edges(...)` (main thread), or `view.entities(...)`, `view.edges(...)`, and `view.search(...)` in an `INTERFACE` render or action. `commissure inspect` summarizes current entities and edges per stage and kind.
+An entity endpoint must name an entity in the same envelope; provenance (`item_version_ids`) must name item versions the subject owns: item stages default to their own, and a group or run stage must name at least one member on every entity and edge. Any of these mistakes fails the run. Read the current graph with `ctx.entities(...)` / `ctx.edges(...)` (main thread), or `view.entities(...)`, `view.edges(...)`, and `view.search(...)` in an `INTERFACE` render or action. `commissure inspect` summarizes current entities and edges per stage and kind.
 
 ### Reviewing Results (`commissure review` & `commissure serve`)
 Measures empirical accuracy on stage checks and parse page checks (`parse:unreadable_pages`, `parse:ocr_pages`):

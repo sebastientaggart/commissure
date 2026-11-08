@@ -12,9 +12,10 @@ follow the same snapshot rules as `current_outcomes` and a rerun supersedes them
 An entity is named by `(kind, key)`: `key` is a stable natural key within its kind,
 stored as `attributes["key"]`. An edge's entity endpoint must name an entity in the same
 envelope, so a snapshot never points at a row a later run superseded; callers join
-across outcomes by `(kind, key)`. Provenance names item versions the subject owns (an
-item stage defaults to its own version); anything else fails the run, like evidence,
-because it is a recipe bug, not bad data. An edge's `evidence` is free text the recipe
+across outcomes by `(kind, key)`. Provenance names item versions the subject owns: an
+item stage defaults to its own version, and a group or run stage must name at least one
+member for every row. Anything else fails the run, like evidence, because it is a recipe
+bug, not bad data. An edge's `evidence` is free text the recipe
 supplies and core does not check; it is not the core `Evidence` pointer.
 """
 
@@ -113,6 +114,13 @@ def _provenance(
     what: str, explicit: tuple[int, ...], default: tuple[int, ...], allowed: set[int]
 ) -> list[int]:
     ids = sorted(set(explicit or default))
+    if not ids:
+        # A row nobody can trace to an original breaks "every result is checkable"; a group
+        # or run stage has no single owner to default to, so it must say which members.
+        raise GraphError(
+            f"{what} names no item version; a group or run stage must set item_version_ids"
+            f" to the members it was read from (owned: {sorted(allowed)})"
+        )
     unknown = [i for i in ids if i not in allowed]
     if unknown:
         raise GraphError(

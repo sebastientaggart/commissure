@@ -55,14 +55,17 @@ RECIPE = textwrap.dedent(
 
     def cluster(ctx: RunContext, group: Group):
         owned = tuple(i.item_version_id for i in group.items)
-        if ctx.params["mode"] == "bad_prov":
+        mode = ctx.params["mode"]
+        if mode == "bad_prov":
             owned += (max(owned) + 1000,)
         return RecordEnvelope.valid(
             Cluster(size=len(group.items)),
-            entities=[EntitySpec(kind="cluster", key=group.key, item_version_ids=owned)],
+            entities=[EntitySpec(kind="cluster", key=group.key,
+                                 item_version_ids=() if mode == "no_entity_prov" else owned)],
             edges=[
                 EdgeSpec(kind="contains", source_entity_key=("cluster", group.key),
-                         target_item_key=i.key, item_version_ids=(i.item_version_id,))
+                         target_item_key=i.key,
+                         item_version_ids=() if mode == "no_edge_prov" else (i.item_version_id,))
                 for i in group.items
             ],
         )
@@ -266,6 +269,8 @@ def test_a_group_rerun_supersedes_its_snapshot(cli, ws_root, recipe, ingested):
         ("tag", "bad_prov", "does not own"),
         ("tag", "dangling", "names no entity in this envelope"),
         ("cluster", "bad_prov", "does not own"),
+        ("cluster", "no_entity_prov", "entity ('cluster', 'all') names no item version"),
+        ("cluster", "no_edge_prov", "edge 'contains' names no item version"),
     ],
 )
 def test_unowned_provenance_and_dangling_endpoints_fail_closed(
