@@ -6,7 +6,7 @@ directly; helpers are not re-exported from ``commissure.api``.
 """
 
 # Core resolves evidence pages with it, so it lives in core; re-exported for recipes.
-from commissure.locate import BlockLocation, locate_offset
+from commissure.locate import BlockLocation, Legibility, legibility, locate_offset
 from commissure.patterns.citations import (
     CFR_RE,
     CFR_SECTION_RE,
@@ -33,6 +33,26 @@ from commissure.patterns.citations import (
     parse_numeric_date,
     parse_prose_date,
 )
+from commissure.patterns.currency import (
+    CURRENCY_VERBS,
+    FINALITY,
+    VERB_STATUS,
+    Action,
+    Claim,
+    Currency,
+    Lineage,
+    Link,
+    MergedEdge,
+    Node,
+    deciding_actors,
+    deciding_edge,
+    graph_rows,
+    lineage,
+    lineage_verdict,
+    merge_claims,
+    resolve_currency,
+    supersession_date,
+)
 from commissure.patterns.table import (
     Column,
     OutputFile,
@@ -56,6 +76,26 @@ from commissure.patterns.text import (
 
 __all__ = [
     "ABBREVIATIONS",
+    "CURRENCY_VERBS",
+    "FINALITY",
+    "VERB_STATUS",
+    "Action",
+    "Claim",
+    "Currency",
+    "Lineage",
+    "Legibility",
+    "Link",
+    "MergedEdge",
+    "Node",
+    "deciding_actors",
+    "deciding_edge",
+    "graph_rows",
+    "legibility",
+    "lineage",
+    "lineage_verdict",
+    "merge_claims",
+    "resolve_currency",
+    "supersession_date",
     "CFR_RE",
     "CFR_SECTION_RE",
     "COURT_CASE_RE",
