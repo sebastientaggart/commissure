@@ -32,10 +32,10 @@ CHROME_PAGE = """
 <nav><a href="/">Home</a> <a href="/policy">Policy</a></nav>
 <main>
   <h1>Final Rule to Delay</h1>
-  <p>Log Number: ACF-OHS-PI-24-07&nbsp;&nbsp;|&nbsp;&nbsp;Issuance Date: 11/06/2024</p>
+  <p>Log Number: AGY-PI-24-07&nbsp;&nbsp;|&nbsp;&nbsp;Issuance Date: 11/06/2024</p>
   <script>var tracking = "ignore me";</script><style>p { color: red }</style>
   <h2>Instruction</h2>
-  <p>On November 6, 2024, ACF <strong>published</strong> a final rule
+  <p>On November 6, 2024, AGY <strong>published</strong> a final rule
      in the Federal Register.</p>
   <ul><li>First point</li><li>Second point<ul><li>Nested point</li></ul></li></ul>
   <p>U.S. Department<br>of Health and Human Services</p>
@@ -64,9 +64,9 @@ def test_main_is_the_content_and_chrome_is_dropped_and_counted(tmp_path):
         assert gone not in doc.text, gone
     assert blocks(doc) == [
         ("heading", "Final Rule to Delay"),
-        ("paragraph", "Log Number: ACF-OHS-PI-24-07 | Issuance Date: 11/06/2024"),
+        ("paragraph", "Log Number: AGY-PI-24-07 | Issuance Date: 11/06/2024"),
         ("heading", "Instruction"),
-        ("paragraph", "On November 6, 2024, ACF published a final rule in the Federal Register."),
+        ("paragraph", "On November 6, 2024, AGY published a final rule in the Federal Register."),
         ("paragraph", "First point"),
         ("paragraph", "Second point"),
         ("paragraph", "Nested point"),
