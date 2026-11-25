@@ -436,7 +436,8 @@ def run(
 
     `all` runs every source but the `opt_in` ones (a site known to refuse scripts). `imports`
     maps a command to `(manifest source, function)` for documents a person saved by hand.
-    Exit 0 when done, 3 when a source was stopped by a challenge (resume later), 1 on error.
+    Exit 0 when every source finished, 1 when any source failed, and 3 only when a
+    source was stopped by a challenge and none failed (resume later).
     """
     imports = dict(imports or {})
     ap = argparse.ArgumentParser(description=description)
@@ -459,10 +460,11 @@ def run(
         except Blocked as exc:
             print(f"{name}: stopped, {exc}; progress is saved, run again later to resume",
                   file=sys.stderr)  # fmt: skip
-            code = EXIT_BLOCKED
+            # A failure needs a person; a block clears on the next run, so 1 outranks 3.
+            code = code if code == EXIT_ERROR else EXIT_BLOCKED
         except Exception as exc:  # report and go on to the next source
             print(f"{name}: failed: {type(exc).__name__}: {exc}", file=sys.stderr)
-            code = EXIT_ERROR if code != EXIT_BLOCKED else code
+            code = EXIT_ERROR
         print(summary(args.intake, name))
     print(f"{fetcher.requests} requests")
     return code

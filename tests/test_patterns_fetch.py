@@ -12,8 +12,10 @@ import pytest
 
 from commissure.patterns.fetch import (
     EXIT_BLOCKED,
+    EXIT_ERROR,
     EXIT_OK,
     USER_AGENT,
+    Blocked,
     Fetcher,
     Manifest,
     Response,
@@ -311,3 +313,19 @@ def test_run_skips_opt_in_sources_for_all_and_exits_3_when_blocked(tmp_path, cap
     assert ran == ["a", "b"]
     assert run(["x"], sources={"x": blocked}, **common) == EXIT_BLOCKED
     assert "progress is saved" in capsys.readouterr().err
+
+
+def test_a_failure_exits_1_ahead_of_a_block_in_either_order(tmp_path, capsys):
+    def blocked(f, intake, limit):
+        raise Blocked("w.example.gov challenged the request")
+
+    def broken(f, intake, limit):
+        raise RuntimeError("could not write the file")
+
+    common = {"description": "t", "intake": tmp_path, "fetcher": fetcher(FakeWeb({}))}
+    sources = {"held": blocked, "broken": broken}
+    for names in (["held", "broken"], ["broken", "held"]):
+        capsys.readouterr()
+        assert run(names, sources=sources, **common) == EXIT_ERROR
+        err = capsys.readouterr().err
+        assert "held:" in err and "broken:" in err
