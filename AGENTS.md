@@ -6,6 +6,8 @@ When code does something that looks arbitrary (a threshold, a refusal, a lock), 
 
 **When a task appears to require violating a principle, stop and say so.** Report the conflict, the principle, and the options. Never quietly deviate, work around a rule, or reinterpret it to fit the task.
 
+`obsidian-notes/` at the repository root, when present, is a symlink to the operator's planning notes for this project (ignored by git and skipped by repo-wide search); read it for intent and status, and keep anything private there, never in tracked files.
+
 ---
 
 ## 1. Vocabulary & Repository Boundaries (The Three Tiers)
