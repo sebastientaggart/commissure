@@ -13,8 +13,8 @@ is fetched, saved, and recorded:
 - `Manifest`: `intake/manifests/<source>.json`, outside every ingest folder: each document's
   URL, retrieval time, SHA-256, and status, saved after every document so a run resumes.
 - `pdf_links`, `distinct_names`, `crawl_listing`, `fetch_pages`: a listing of pages, each
-  page's own PDFs (off-site links recorded, never fetched), or the page itself as HTML when
-  it has none (`html_only`).
+  page's own PDFs under the site's document `path_prefix` (off-site links recorded, never
+  fetched), or the page itself as HTML when it has none (`html_only`).
 - `import_saved`: when a site refuses scripts and a person saves its pages in a browser, match
   what was saved against the saved listings and report what is missing, unlisted, not a
   document, or saved twice. Nothing is moved, renamed, or deleted.
@@ -212,21 +212,25 @@ def save_pdf(folder: Path, name: str, resp: Response) -> dict:
 # --- pages ---------------------------------------------------------------------------------
 
 
-def pdf_links(page: str, base: str) -> tuple[list[str], list[str]]:
-    """The PDFs a page links to under `/sites/default/files/`, in order: `(own, offsite)`.
+def pdf_links(page: str, base: str, *, path_prefix: str) -> tuple[list[str], list[str]]:
+    """The PDFs a page links to whose path starts with `path_prefix`, in order: `(own, offsite)`.
 
-    Only the page's own host is the source's document: a report links other agencies' PDFs
-    as citations (and their sites may challenge scripts). Off-site links are returned so the
-    manifest records them; they are not fetched.
+    `path_prefix` narrows links to the site's document store so stray PDFs in navigation or
+    boilerplate are ignored. It has no default: a forgotten prefix would take every PDF on the
+    host, navigation included, and nothing would say so. Only the page's own host is the
+    source's document: a report links other agencies' PDFs as citations (and their sites may
+    challenge scripts). Off-site links are returned so the manifest records them; they are not
+    fetched.
     """
     own: list[str] = []
     offsite: list[str] = []
     host = urllib.parse.urlsplit(base).hostname
     for href in re.findall(r'href="([^"]+\.pdf)(?:[?#][^"]*)?"', page, re.I):
         url = urllib.parse.urljoin(base, html.unescape(href))
-        if "/sites/default/files/" not in url or url in own or url in offsite:
+        split = urllib.parse.urlsplit(url)
+        if not split.path.startswith(path_prefix) or url in own or url in offsite:
             continue
-        (own if urllib.parse.urlsplit(url).hostname == host else offsite).append(url)
+        (own if split.hostname == host else offsite).append(url)
     return own, offsite
 
 
@@ -292,8 +296,11 @@ def fetch_pages(
     limit: int | None,
     name_for: Callable[[str, str, int, int], str],
     meta_for: Callable[[str, str], dict],
+    *,
+    path_prefix: str,
 ) -> None:
-    """Each page's own PDFs into `folder`, or the page itself as `<slug>.html` when it has none.
+    """Each page's own PDFs under `path_prefix` into `folder`, or the page itself as
+    `<slug>.html` when it has none.
 
     A page already `done` or `html_only` is skipped, so an interrupted run resumes; a page with
     a file that was not saved is `incomplete` and fetched again on the next run; `name_for`
@@ -311,7 +318,7 @@ def fetch_pages(
         if resp.status != 200:
             m.docs[path] = entry | {"status": f"http_{resp.status}"}
         else:
-            links, offsite = pdf_links(resp.text, base + path)
+            links, offsite = pdf_links(resp.text, base + path, path_prefix=path_prefix)
             entry |= meta_for(path, resp.text)
             names = distinct_names(
                 [safe_name(name_for(path, url, i, len(links))) for i, url in enumerate(links)],

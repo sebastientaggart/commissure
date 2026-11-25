@@ -130,7 +130,7 @@ def test_page_links_are_the_pages_own_and_repeated_names_stay_apart():
         '<a href="https://other.example.gov/sites/default/files/c.pdf">cited</a>'
         '<a href="/files/not-a-document-store.pdf">x</a>'
     )
-    own, offsite = pdf_links(page, f"{SITE}/reports/r1")
+    own, offsite = pdf_links(page, f"{SITE}/reports/r1", path_prefix="/sites/default/files/")
     assert own == [
         f"{SITE}/sites/default/files/a/brief.pdf",
         f"{SITE}/sites/default/files/b/brief.pdf",
@@ -138,6 +138,38 @@ def test_page_links_are_the_pages_own_and_repeated_names_stay_apart():
     assert offsite == ["https://other.example.gov/sites/default/files/c.pdf"]
     names = distinct_names(["brief.pdf", "brief.pdf"], own)
     assert names[0] == "brief.pdf" and names[1].startswith("brief--") and names[1] != names[0]
+    with pytest.raises(TypeError, match="path_prefix"):  # no default: a fetcher must state it
+        pdf_links(page, f"{SITE}/reports/r1")  # type: ignore[call-arg]
+
+
+def test_non_drupal_site_fetches_pdfs_under_its_stated_path_prefix(tmp_path):
+    page = html_page(
+        '<nav><a href="/about/charter.pdf">Charter</a></nav>'
+        '<a href="/downloads/2026/order-1.pdf">Order 1</a>'
+        '<a href="https://other.example.gov/downloads/cited.pdf">Cited</a>'
+    )
+    web = FakeWeb({
+        f"{SITE}/orders/o-1": page,
+        f"{SITE}/downloads/2026/order-1.pdf": PDF,
+        f"{SITE}/about/charter.pdf": PDF + b"nav",
+    })  # fmt: skip
+    m = Manifest.load(tmp_path, "orders")
+    fetch_pages(
+        fetcher(web),
+        m,
+        SITE,
+        ["/orders/o-1"],
+        tmp_path / "orders",
+        None,
+        lambda p, url, i, n: url,
+        lambda p, text: {"title": page_title(text)},
+        path_prefix="/downloads/",
+    )
+    assert [p.name for p in (tmp_path / "orders").iterdir()] == ["order-1.pdf"]
+    assert f"{SITE}/about/charter.pdf" not in web.calls
+    doc = Manifest.load(tmp_path, "orders").docs["/orders/o-1"]
+    assert doc["status"] == "done"
+    assert doc["offsite_pdfs"] == ["https://other.example.gov/downloads/cited.pdf"]
 
 
 def test_titles_and_canonical_urls_come_from_the_page():
@@ -169,7 +201,17 @@ def _pages(f: Fetcher, intake: Path, limit: int | None = None) -> Manifest:
     def meta(path: str, page: str) -> dict:
         return {"title": page_title(page)}
 
-    fetch_pages(f, m, SITE, paths, intake / "notices", limit, lambda p, url, i, n: url, meta)
+    fetch_pages(
+        f,
+        m,
+        SITE,
+        paths,
+        intake / "notices",
+        limit,
+        lambda p, url, i, n: url,
+        meta,
+        path_prefix="/sites/default/files/",
+    )
     return Manifest.load(intake, "notices")
 
 
