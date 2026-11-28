@@ -7,7 +7,7 @@ Changes to Commissure core that a solution author may need to act on. A solution
 - **Added:** a new capability a solution may want to adopt, such as a helper graduated to `commissure/patterns/` that replaces code in a recipe.
 - History before 0.3.0 is in git.
 
-## Unreleased
+## 0.4.1
 
 - **Upgrading:** Correction to the 0.4.0 move: don't run `uv run ruff check --fix .` over `recipe/` in a solution whose workspace you want to keep. Ruff now sorts `commissure` as a third-party import, and reordering a recipe file's imports changes its bytes, which changes the fingerprint of every stage that imports it: the next run recomputes them all, and verdicts on the old snapshot stop counting until they are recorded again. Keep the old order instead, in `pyproject.toml`: `[tool.ruff.lint.isort]` `known-first-party = ["commissure"]`. If `--fix` already ran, restore `recipe/*.py` from git before the next run.
 - **Upgrading:** A solution's contract (purpose, inputs, domain and quarantine rules, acceptance gate, definition of done) now lives in its root `AGENTS.md`, not `recipe/AGENTS.md`, so an agent has one solution file to read beside core's kit. The skills and docs now say so. In an existing solution, replace the root `AGENTS.md` boilerplate with the "Working here" section of a fresh `commissure new`, move every section of `recipe/AGENTS.md` under it, delete `recipe/AGENTS.md`, and update its `export-ignore` line in `.gitattributes` if it had one. Keep the contract to the contract: measurements, recon output, history, and plans go in `docs/`.
