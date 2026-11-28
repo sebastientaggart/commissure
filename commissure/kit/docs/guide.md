@@ -333,6 +333,31 @@ sqlite3 workspace/state.db ".dump review_samples review_instances verdicts" > re
 
 The tables are append-only and dump in row order, so each commit's diff is exactly the new samples and verdicts. It contains reviewer names and notes, and a solution's repository is its release, so commit it only where the client may see them. It is a record, not a restore path: its rows refer to this workspace's outcome ids and `item:<id>` subject keys, which a rebuilt workspace assigns differently, and it carries no append-only triggers. Never load it into another workspace; restore from a database backup.
 
+### Testing a Recipe (`commissure.testing`)
+
+Commissure registers a `pytest` plugin (`commissure.testing`) that provides the `commissure_run` fixture (an instance of `commissure.testing.Pipeline` bound to `tmp_path / "workspace"` and the solution's `recipe/`). Use it instead of wrapping `CliRunner` or querying `current_outcomes` / `current_records` in raw SQL:
+
+```python
+def test_extract_and_tally(commissure_run):
+    # Folders outside tmp_path (such as intake/<batch>) are copied into tmp_path first.
+    assert commissure_run.ingest("intake/comments", role="comment").exit_code == 0
+    for report in commissure_run.steps("parse", "extract", "tally").values():
+        assert report.exit_code == 0, report
+
+    # Current outcomes per stage, keyed by locator (item), group key (group), or "run" (run):
+    # each entry has .outcome, .reason, .codes, and .payload (also accessible as dict keys).
+    extract = commissure_run.records("extract")
+    assert extract["c09.html"].outcome == "warning"
+    assert extract["c09.html"].reason == "no_position_phrase"
+    assert extract["c10.html"].outcome == "quarantined"
+    assert extract["c23-scan.pdf"].outcome == "skipped"  # quarantined at parse -> no_text
+
+    tally = commissure_run.records("tally")["run"].payload
+    assert tally["comments"] == 21
+```
+
+For module-scoped pipelines (`tmp_path_factory`), construct `Pipeline(tmp / "workspace", ROOT / "recipe")` directly (`from commissure.testing import Pipeline`). Methods: `.load()`, `.ingest(source, role="corpus", *flags)`, `.parse(parser=None, *flags)`, `.stage(name, *flags)`, `.steps(*names)`, `.records(stage)`, `.review(subcommand, *args, reviewer=None)`, and `.workspace`. None of the runner methods assert on `.exit_code`, so tests can assert failure exit codes (`1`, `2`, `3`) directly.
+
 ---
 
 ## 4. Working with Coding Agents

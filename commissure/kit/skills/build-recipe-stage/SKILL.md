@@ -90,8 +90,10 @@ until a split is clearly needed.
    `discovered` (zero successes = failed run; a suspiciously all-valid run is also wrong).
    Local LLM stages default to `workers=1`; code edits start a fresh snapshot; otherwise a
    `--limit` or interrupted run resumes (`--fresh` forces a new snapshot).
-5. **Tests (`tests/`)**: use `open_workspace` / the CLI—never hand-rolled
-   tables. Patterns to copy: rule input + clean sibling
+5. **Tests (`tests/`)**: drive stages with the `commissure_run` fixture (or
+   `commissure.testing.Pipeline`) and read outcomes via `.records(stage)`—never
+   hand-rolled tables or raw SQL against core views (`open_workspace` stays available for
+   low-level checks). Patterns to copy: rule input + clean sibling
    (`test_every_rule_fires_on_its_input_and_not_on_clean_siblings`), gate fail,
    honest empty state, external URL refused, mock LLM transport, `needs_tesseract` when OCR
    is required. Name each test in `recipe/AGENTS.md` Quarantine rules.

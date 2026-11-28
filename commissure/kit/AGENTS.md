@@ -35,7 +35,7 @@ Use these exact nouns without inventing synonyms:
 
 ## 3. Boundaries
 
-- **Public surface:** Recipes import only from `commissure.api` (and optionally `commissure.patterns`), never from internal core modules or provider SDKs. Tests may also use the internal modules these docs name for tests (`commissure.workspace.open_workspace`, `commissure.recipes.load_recipe`, `commissure.cli.app`). Needing any other internal import is a sign a core change is needed.
+- **Public surface:** Recipes import only from `commissure.api` (and optionally `commissure.patterns`), never from internal core modules or provider SDKs. Solution tests use `commissure.testing` (`commissure_run` and `Pipeline`; `commissure.workspace.open_workspace` and `commissure.recipes.load_recipe` remain available when needed). Needing any other internal import is a sign a core change is needed.
 - **Rule of Two:** Keep domain schemas, extraction rules, and helpers inside the solution's `recipe/`. A helper graduates to `commissure/patterns/` only when a second recipe needs it or the operator asks.
 - **Pre-ingest fetchers** (scripts that populate `intake/` and read `.env`) go in `recipe/tools/`.
 - **Scheduling belongs to the OS** (`cron`, `launchd`, `systemd`), supported by workspace lockfiles, `--trigger`, and deterministic exit codes (`0` ok/noop, `1` failed, `2` usage/config error, `3` locked).
@@ -93,5 +93,5 @@ Read the matching skill (`.agents/commissure/skills/`, linked in `.claude/skills
 ## 7. Tests
 
 - Solution tests and small synthetic fixtures live in `tests/` (`uv run pytest`). Input fixtures are copied into `tmp_path` before use and never modified in place.
-- Load the recipe with `load_recipe` (the production path) and build workspaces with `open_workspace` or the CLI (`commissure.cli.app` through `typer.testing.CliRunner`). The example solution's `tests/test_recipe.py` (`commissure new <dir> --example`) runs ingest, parse, and stages that way over a copy of its corpus.
+- Drive the recipe with the `commissure_run` pytest fixture (or `commissure.testing.Pipeline`), which runs the CLI against a scratch workspace and reads current outcomes and payloads through `.records(stage)` without hand-assembling `CliRunner` calls or raw SQL against core's tables. The example solution's `tests/test_recipe.py` (`commissure new <dir> --example`) runs ingest, parse, and stages that way over a copy of its corpus.
 - No test reaches outside the solution folder, and no fixture holds client data that may not be committed.

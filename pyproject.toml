@@ -58,6 +58,9 @@ docx = [
 [project.scripts]
 commissure = "commissure.cli:app"
 
+[project.entry-points.pytest11]
+commissure = "commissure.testing"
+
 [dependency-groups]
 dev = [
     "pytest>=9.1.1",
