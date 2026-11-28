@@ -43,7 +43,7 @@ jobs:
         run: uv build
 
       - name: Attest
-        uses: astral-sh/attest-action@v0
+        uses: astral-sh/attest-action@v0.0.7
 
       - name: Publish to PyPI
         run: uv publish --trusted-publishing always
