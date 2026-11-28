@@ -290,6 +290,24 @@ def test_refresh_leaves_solutions_and_local_files_byte_identical(wrapped):
     assert (dest / "CLAUDE.md").read_text().splitlines()[-1] == "@AGENTS.local.md"
 
 
+def test_an_unscaffolded_solution_gets_new_solution_until_it_has_a_recipe(wrapped, core):
+    dest, repo, *_ = wrapped
+    write(repo / ".agents" / "skills" / "new-solution" / "SKILL.md", "# new-solution\n")
+    git(repo, "add", "-A")
+    git(repo, "commit", "-q", "-m", "skill")
+    wrapper.repin(dest, git(repo, "rev-parse", "HEAD"), run_tests=False, echo=lambda _: None, **OFF)
+    recipe = dest / "solutions" / "alpha" / "recipe"
+    recipe.rename(recipe.with_name("recipe-aside"))  # a repository holding only an idea
+    wrapper.refresh(dest, **OFF)
+    links = dest / ".claude" / "skills"
+    assert (links / "new-solution" / "SKILL.md").is_file()
+    assert "Not scaffolded yet" in (dest / "AGENTS.md").read_text()
+    recipe.with_name("recipe-aside").rename(recipe)
+    wrapper.refresh(dest, **OFF)
+    assert not (links / "new-solution").exists()
+    assert "Not scaffolded yet" not in (dest / "AGENTS.md").read_text()
+
+
 def test_refresh_rebuilds_a_missing_snapshot_at_the_pin(wrapped):
     dest, repo, rev1, _ = wrapped
     wrapper._rmtree(dest / ".core")

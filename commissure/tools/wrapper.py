@@ -46,9 +46,11 @@ TEMPLATE = Path(__file__).parent / "wrapper_template"
 # Paths copied into .core/ when the pinned revision has them. The issue template is there so
 # an upstream draft can follow it; CHANGELOG.md is what `repin` diffs.
 SNAPSHOT = ("AGENTS.md", "README.md", "CHANGELOG.md", "docs", ".agents", ".github/ISSUE_TEMPLATE")
-# Skills a solution owner uses. new-solution is not one: `dev new` scaffolds; release-target
-# needs a core checkout, so releases stay with the core maintainer.
+# Skills a solution owner uses. release-target is not one: it needs a core checkout, so
+# releases stay with the core maintainer. new-solution only until the solution is scaffolded
+# (a solution repository can start as an idea and nothing else).
 SKILLS = ("build-recipe-stage", "investigate-solution")
+NEW_SKILLS = ("new-solution",)
 # Core's own dev group (pyproject.toml), so tests and lint behave the same in a wrapper.
 # tests/test_wrapper.py fails when the two drift.
 DEV_DEPS = ("pytest>=9.1.1", "pytest-xdist>=3.8.0", "ruff>=0.17.2")
@@ -242,11 +244,24 @@ def pinned_revision(wrapper: Path) -> str | None:
     return rev.read_text(encoding="utf-8").strip() if rev.is_file() else None
 
 
+NOT_SCAFFOLDED = (
+    "\n**Not scaffolded yet.** Follow the `new-solution` skill: run "
+    "`uv run commissure init solutions/{name} --json` from this folder, then stop.\n"
+)
+
+
+def skills_for(wrapper: Path, name: str) -> list[str]:
+    """The skills to link: SKILLS, plus NEW_SKILLS while the solution has no recipe/."""
+    wanted = SKILLS + (() if (wrapper / "solutions" / name / "recipe").is_dir() else NEW_SKILLS)
+    return [s for s in wanted if (wrapper / ".core/.agents/skills" / s).is_dir()]
+
+
 def render(wrapper: Path, name: str, rev: str, core_url: str) -> dict[str, str]:
     """The generated text files, by path relative to the wrapper."""
     tmpl = {p.name.removesuffix(".tmpl"): p.read_text(encoding="utf-8")
             for p in TEMPLATE.glob("*.tmpl")}  # fmt: skip
-    skills = [s for s in SKILLS if (wrapper / ".core/.agents/skills" / s).is_dir()]
+    skills = skills_for(wrapper, name)
+    scaffolded = (wrapper / "solutions" / name / "recipe").is_dir()
     project = re.sub(r"[^a-z0-9._-]+", "-", f"{name}-dev".lower())
     imports = ["@AGENTS.md", "@.core/AGENTS.md"]
     if (wrapper / "AGENTS.local.md").is_file():
@@ -262,6 +277,7 @@ def render(wrapper: Path, name: str, rev: str, core_url: str) -> dict[str, str]:
         "AGENTS.md": Template(tmpl["AGENTS.md"]).substitute(
             name=name,
             skills=", ".join(f"`{s}`" for s in skills) or "none in this snapshot",
+            state="" if scaffolded else NOT_SCAFFOLDED.format(name=name),
             issues_repo=issues_repo(),
         ),
         "CLAUDE.md": "\n".join(imports) + "\n",
@@ -282,9 +298,8 @@ def write_generated(wrapper: Path, name: str, rev: str, core_url: str) -> None:
     for old in links.iterdir():
         if old.is_symlink() and os.readlink(old).startswith(SKILL_LINK):
             old.unlink()
-    for s in SKILLS:
-        if (wrapper / ".core/.agents/skills" / s).is_dir():
-            (links / s).symlink_to(SKILL_LINK + s)
+    for s in skills_for(wrapper, name):
+        (links / s).symlink_to(SKILL_LINK + s)
 
 
 def sync(wrapper: Path, *, upgrade: bool = False) -> None:
