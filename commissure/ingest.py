@@ -203,6 +203,29 @@ def register_source(conn: sqlite3.Connection, kind: str, uri: str, role: str) ->
     return cur.lastrowid
 
 
+def _adopt_absolute_source(conn: sqlite3.Connection, folder: Path, stored_uri: str) -> None:
+    """Rewrite an absolute row for this same folder to its stored form, keeping its id.
+
+    Workspaces written before folder sources were stored relative hold the resolved absolute
+    path. Without this, the first ingest after upgrading misses that row and registers a second
+    source for the same, unmoved folder, duplicating every item. The path still resolves to
+    this folder, so rewriting it is safe; a moved folder's stale row is `relocate`'s job.
+    """
+    absolute = str(folder)
+    if stored_uri == absolute:
+        return
+    rows = {
+        r["uri"]: r["id"]
+        for r in conn.execute(
+            "SELECT id, uri FROM sources WHERE kind = ? AND uri IN (?, ?)",
+            (FOLDER, absolute, stored_uri),
+        )
+    }
+    if absolute in rows and stored_uri not in rows:
+        with transaction(conn):
+            conn.execute("UPDATE sources SET uri = ? WHERE id = ?", (stored_uri, rows[absolute]))
+
+
 def _stale_folder_warnings(
     conn: sqlite3.Connection,
     ws_root: Path,
@@ -353,6 +376,7 @@ def ingest_folder(
     conn = ws.conn
     folder = check_folder_source(folder, ws.root)
     stored_uri = format_folder_uri(folder, ws.root)
+    _adopt_absolute_source(conn, folder, stored_uri)
     warnings = _stale_folder_warnings(conn, ws.root, folder, stored_uri, role)
     source_id = register_source(conn, FOLDER, stored_uri, role)
     run_id = start_run(conn, "ingest", trigger=trigger, config=config, source_id=source_id)

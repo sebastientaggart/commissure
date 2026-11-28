@@ -5,7 +5,7 @@ import os
 import shutil
 from pathlib import Path
 
-from commissure.workspace import hash_file, open_workspace
+from commissure.workspace import hash_file, open_workspace, transaction
 
 ALL = ["alpha.txt", "beta.txt", "nested/delta.csv", "nested/gamma.txt"]
 
@@ -500,7 +500,6 @@ def test_readers_resolve_both_stored_source_forms_to_absolute_paths(cli, tmp_pat
 
 
 def test_sources_relocate_and_ingest_stale_source_warning(cli, tmp_path):
-    from commissure.workspace import transaction
 
     old_sol = tmp_path / "old" / "demo"
     old_ws = old_sol / "workspace"
@@ -720,3 +719,28 @@ def test_sources_relocate_and_ingest_stale_source_warning(cli, tmp_path):
         {"id": 2, "uri": str(new_ext.resolve())},
         {"id": 3, "uri": str(ext_v3.resolve())},
     ]
+
+
+def test_unmoved_absolute_source_from_older_workspace_is_adopted_not_duplicated(cli, tmp_path):
+    # A workspace written before relative storage holds the same, still-valid folder as an
+    # absolute path. The next ingest must reuse that source (rewritten to the relative form),
+    # not register a second one and re-add every item.
+    sol = tmp_path / "demo"
+    assert cli("init", str(sol)).exit_code == 0
+    batch = sol / "intake" / "batch"
+    batch.mkdir(parents=True)
+    (batch / "one.txt").write_text("hello\n")
+    code, first = cli.ingest(sol / "workspace", batch)
+    assert code == 0, first
+    ws = open_workspace(sol / "workspace")
+    with transaction(ws.conn):
+        ws.conn.execute("UPDATE sources SET uri = ? WHERE id = 1", (str(batch.resolve()),))
+    ws.close()
+
+    code2, second = cli.ingest(sol / "workspace", batch)
+    assert code2 == 0, second
+    assert (second["status"], second["added"], second["unchanged"]) == ("noop", 0, 1)
+    assert _query(sol / "workspace", "SELECT id, uri FROM sources") == [
+        {"id": 1, "uri": "intake/batch"}
+    ]
+    assert _query(sol / "workspace", "SELECT count(*) AS n FROM items")[0]["n"] == 1
