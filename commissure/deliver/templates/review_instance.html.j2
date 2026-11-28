@@ -32,6 +32,8 @@
         <p class="muted">{{ e.locator | filename }}{% if e.page %}, p. {{ e.page }}{% endif %}{% if e.via_ocr %} <span class="badge badge-ocr">ocr {{ "%.1f" % e.confidence if e.confidence is not none else "" }}</span>{% endif %}{% if e.copied %} <span class="muted">(copied from an upstream record)</span>{% endif %}</p>
         {% if e.span_text is not none %}
         <p>&hellip;{{ e.context_before }}<mark>{{ e.span_text }}</mark>{{ e.context_after }}&hellip;</p>
+        {% elif e.pruned_at %}
+        <p class="muted">The extracted text row was pruned ({{ e.pruned_at }}); check the original.</p>
         {% else %}
         <p class="muted">Points at the item as a whole: no exact span. Search the original for it.</p>
         {% endif %}

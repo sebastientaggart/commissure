@@ -21,14 +21,14 @@ Then look closer:
 uv run commissure inspect --only-errors      # what was set aside, and why
 uv run commissure inspect --subject c21.pdf  # one comment: text, outcome, evidence (page 2)
 uv run commissure review checks              # the questions a reviewer answers
-uv run pytest                                # the acceptance gate in recipe/AGENTS.md
+uv run pytest                                # the acceptance gate in AGENTS.md
 ```
 
 ## What to read
 
-- `recipe/AGENTS.md`: the contract an agent writes before any code (inputs, rules, quarantine, gate).
+- `AGENTS.md`: the contract an agent writes before any code (inputs, rules, quarantine, gate).
 - `recipe/extract.py`: one item stage returning quotes as `Evidence` spans that core verifies.
 - `recipe/tally.py` and `recipe/interface.py`: a run stage and the page `serve` shows.
-- `AGENTS.md` and `.agents/commissure/`: what a coding agent reads in every solution.
+- `.agents/commissure/`: core's rules, docs, and skills, which a coding agent reads in every solution.
 
 To start your own: `uvx commissure new <dir>`.

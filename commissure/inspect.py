@@ -495,6 +495,12 @@ def _render_subject(console: Console, detail: dict[str, Any]) -> None:
             if page["url"]:
                 line(f"    {escape(page['url'])}")
         for text in item["texts"]:
+            if text.get("pruned_at"):
+                line(
+                    f"  text {escape(text['parser'])} {escape(text['parser_version'])}:"
+                    f" pruned ({escape(text['pruned_at'])})"
+                )
+                continue
             line(
                 f"  text {escape(text['parser'])} {escape(text['parser_version'])}:"
                 f" {text['chars']:,} chars"
@@ -533,6 +539,8 @@ def _render_subject(console: Console, detail: dict[str, Any]) -> None:
             after = " ".join((ev["context_after"] or "").split())
             span = " ".join(ev["span_text"].split())
             line(f"  in text   ...{escape(before)} [bold]{escape(span)}[/bold] {escape(after)}...")
+        elif ev.get("pruned_at"):
+            line(f"  in text   (pruned at {escape(ev['pruned_at'])}; check the original)")
         else:
             line("  in text   (the item as a whole: no exact span; search the original for it)")
         if ev["url"]:
@@ -836,12 +844,12 @@ def _subject_evidence(
         params += [under, len(under) + 1, under + "/"]
     rows = conn.execute(
         f"""
-        SELECT er.*, v.size_bytes, o.record_id,
-               CASE WHEN er.span_start IS NOT NULL THEN substr(t.text,
+        SELECT er.*, v.size_bytes, o.record_id, t.pruned_at,
+               CASE WHEN er.span_start IS NOT NULL AND t.pruned_at IS NULL THEN substr(t.text,
                     max(er.span_start - {_CONTEXT_CHARS}, 0) + 1,
                     er.span_start - max(er.span_start - {_CONTEXT_CHARS}, 0)) END
                    AS context_before,
-               CASE WHEN er.span_start IS NOT NULL
+               CASE WHEN er.span_start IS NOT NULL AND t.pruned_at IS NULL
                     THEN substr(t.text, er.span_end + 1, {_CONTEXT_CHARS}) END AS context_after
         FROM evidence_review er
         JOIN item_versions v ON v.id = er.item_version_id
@@ -876,6 +884,8 @@ def _subject_evidence(
                 "span_start", "span_end", "span_text", "context_before", "context_after",
             )
         }  # fmt: skip
+        if r["pruned_at"] is not None:
+            entry["pruned_at"] = r["pruned_at"]
         entry["via_ocr"] = bool(r["via_ocr"])
         entry["original_path"] = str(original)
         entry["original_status"] = status
@@ -991,10 +1001,19 @@ def _item_detail(
     if not texts:
         return detail
     detail["texts"] = [
-        {**dict(t), "chars": len(t["text"])}
+        {
+            "extracted_text_id": t["extracted_text_id"],
+            "parser": t["parser"],
+            "parser_version": t["parser_version"],
+            "text_hash": t["text_hash"],
+            "text": None if t["pruned_at"] else t["text"],
+            "chars": None if t["pruned_at"] else len(t["text"]),
+            **({"pruned_at": t["pruned_at"]} if t["pruned_at"] is not None else {}),
+        }
         for t in conn.execute(
             """
-            SELECT et.id AS extracted_text_id, et.parser, et.parser_version, et.text_hash, et.text
+            SELECT et.id AS extracted_text_id, et.parser, et.parser_version, et.text_hash,
+                   et.text, et.pruned_at
             FROM extracted_text et
             WHERE et.item_version_id = ?
               AND et.id = (SELECT max(e2.id) FROM extracted_text e2

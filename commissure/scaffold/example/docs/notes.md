@@ -14,4 +14,4 @@ The `tally` record and the interface (`uv run commissure serve`).
 
 ## Open questions
 
-None: the example's contract (`recipe/AGENTS.md`) is approved.
+None: the example's contract (`AGENTS.md`) is approved.

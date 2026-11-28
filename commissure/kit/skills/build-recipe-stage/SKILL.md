@@ -2,7 +2,7 @@
 name: build-recipe-stage
 description: >-
   Build or extend one stage, HTML deliverable, or web interface (INTERFACE) of a
-  Commissure recipe after recipe/AGENTS.md is approved: schema, function,
+  Commissure recipe after its contract (AGENTS.md) is approved: schema, function,
   declaration, slice run, proven-to-fail tests, then stop. Use when asked to
   implement, build, add, or extend a stage, schema, extraction, analysis,
   deliverable, dashboard, or local web interface in a solution.
@@ -15,7 +15,7 @@ is the order of work for one stage; do not restate those rules in prose.
 
 ## Precondition
 
-1. `recipe/AGENTS.md` must be approved by the operator (or the operator
+1. The contract (the solution's `AGENTS.md`) must be approved by the operator (or the operator
    names the stage to build). If it is missing or only a scaffold, stop and run
    `investigate-solution` first.
 2. Build the first unbuilt row of `## Proposed stages`, or the stage the operator names.
@@ -35,9 +35,9 @@ tests that proved failure, and “next stage `<name>`, or change?”
 
 ## Workflow
 
-Prefer scaffold modules (`extract.py`, `analyze.py`, `deliver.py`) while the stage is
-small. Split to a domain-named module when it outgrows them. Keep models in `schema.py`
-until a split is clearly needed.
+Put each stage in a module named for what it does: the scaffold's `extract.py` for the
+first item stage, then `tally.py`, `brief.py`, `interface.py` as the recipe grows. Keep
+models in `schema.py` until a split is clearly needed.
 
 1. **Schema (`recipe/schema.py`)**: Pydantic model with `extra="forbid"` (core enforces at
    load). Missing values use `None` plus a diagnostic—never a fabricated default. A
@@ -52,7 +52,7 @@ until a split is clearly needed.
    (one thing per question; the operator settles the wording before any sample).
 2. **Stage function**: Import only from `commissure.api` (and `commissure.patterns` if
    present). Return the schema instance or `RecordEnvelope.warning` / `.quarantined` /
-   `.skipped` with a non-empty `reason_code` from `recipe/AGENTS.md`.
+   `.skipped` with a non-empty `reason_code` from the contract (`AGENTS.md`).
    - Check `item.upstream_outcomes` / `group.upstream_outcomes` when upstream warnings
      (`ocr_pages`, `unreadable_pages`) affect trust.
    - Inspect `group.excluded` on group and run stages so incomplete items are never
@@ -86,15 +86,17 @@ until a split is clearly needed.
    uv run commissure inspect --call <call_id> --json   # LLM: raw request + response
    ```
    `--limit N` takes the first N pending subjects—also hit quarantine cases from
-   `recipe/AGENTS.md` via `--subject` or a targeted fixture. Verify counts against
+   the contract (`AGENTS.md`) via `--subject` or a targeted fixture. Verify counts against
    `discovered` (zero successes = failed run; a suspiciously all-valid run is also wrong).
    Local LLM stages default to `workers=1`; code edits start a fresh snapshot; otherwise a
    `--limit` or interrupted run resumes (`--fresh` forces a new snapshot).
-5. **Tests (`tests/`)**: use `open_workspace` / the CLI—never hand-rolled
-   tables. Patterns to copy: rule input + clean sibling
+5. **Tests (`tests/`)**: drive stages with the `commissure_run` fixture (or
+   `commissure.testing.Pipeline`) and read outcomes via `.records(stage)`—never
+   hand-rolled tables or raw SQL against core views (`open_workspace` stays available for
+   low-level checks). Patterns to copy: rule input + clean sibling
    (`test_every_rule_fires_on_its_input_and_not_on_clean_siblings`), gate fail,
    honest empty state, external URL refused, mock LLM transport, `needs_tesseract` when OCR
-   is required. Name each test in `recipe/AGENTS.md` Quarantine rules.
+   is required. Name each test in `AGENTS.md` Quarantine rules.
 6. **Verify**: deterministic stages—run the full corpus. LLM stages—slice, read
    `inspect --call`, then ask before a long full run. A gate that fails on purpose is a
    reported result, not a bug to fix. From the solution folder: `uv run pytest`,
@@ -149,5 +151,5 @@ renders records and produces no outputs. Do not run `commissure run` for it.
   domain-neutral substrate change, stop and draft an upstream request
   (`.agents/commissure/AGENTS.md`, Boundaries).
 - Keep helpers in the recipe until a second recipe needs them (Rule of Two).
-- Keep `intake/` read-only, `allow_remote=False` unless approved in `recipe/AGENTS.md`, and
+- Keep `intake/` read-only, `allow_remote=False` unless approved in `AGENTS.md`, and
   run no git commands unless asked.

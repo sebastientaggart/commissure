@@ -11,7 +11,7 @@ Each solution is its own project and git repository, depending on the `commissur
 ```text
 <solution>/
   pyproject.toml  Name, version, and `commissure~=X.Y.Z`; uv.lock pins the exact version
-  AGENTS.md       Rules for coding agents in this solution (CLAUDE.md imports it)
+  AGENTS.md       The solution's contract: purpose, inputs, domain & quarantine rules, acceptance gate (CLAUDE.md imports it)
   .agents/commissure/  Core's rules, these docs, and skills, for the installed version (never edited)
   README.md       What the solution does and how to run it
   .gitignore      Excludes workspace/, intake documents, and secrets (.env)
@@ -21,16 +21,14 @@ Each solution is its own project and git repository, depending on the `commissur
   tests/          Solution tests and fixtures (uv run pytest)
   workspace/      state.db, blobs/, outputs/ (created by the first run; local)
   recipe/
-    AGENTS.md     Operation purpose, recon notes, domain & quarantine rules, acceptance gate
     recipe.py     Entry point: defines STAGES (ordered list of Stage declarations) and optional INTERFACE
     schema.py     Strict Pydantic payload models (ConfigDict(extra="forbid"))
     extract.py    Per-item extraction → schema instance or RecordEnvelope
-    analyze.py    Cross-item group and run stages, entity/edge population
-    deliver.py    Renders outputs from workspace state into workspace/outputs/
+    *.py          More stage modules as the recipe grows (group and run stages, deliverables, INTERFACE)
     tools/        Optional pre-ingest fetchers/scripts that populate intake/ and read .env
 ```
 
-The scaffolded `recipe/recipe.py` declares no stages and fails at startup on purpose until the operator populates `intake/` and `docs/` and an agent completes reconnaissance in `recipe/AGENTS.md`.
+The scaffolded `recipe/recipe.py` declares no stages and fails at startup on purpose until the operator populates `intake/` and `docs/` and an agent completes reconnaissance in the contract (`AGENTS.md`).
 
 ---
 
@@ -112,6 +110,12 @@ STAGES = [
     ),
 ]
 ```
+
+### Group and Run Stages, Deliverables
+
+- **Group stages** (`subject="group"`, `group_by=...`) receive `group.items` for one group key; a **run stage** (`subject="run"`) receives one `Group` over every complete item. Incomplete items (no valid upstream record) land in `group.excluded` with a reason when `group_by` can place them from the locator or another field every item has; a `group_by` that reads upstream payloads can't place them, so they stay unplaced. Name what was excluded in the result rather than dropping it silently.
+- `ctx.map(fn, items)` runs per-item work inside a group or run stage on the run's bounded thread pool. Stages return a schema model or a `RecordEnvelope` and never touch SQLite.
+- **Deliverables** are ordinary run or group stages: they read upstream payloads in memory, write files into `ctx.outputs` (`<workspace>/outputs/<stage>/<run_id>/`), verify them structurally (exists, non-zero size, expected page/sheet/row counts, no external resource URLs), and return a record describing them. Template and brand files a stage reads are listed in `Stage(..., assets=(...))`, so editing one makes the stage stale.
 
 ### HTML Deliverables & Charts (`render_page`)
 
@@ -247,6 +251,21 @@ uv run commissure search "budget AND (personnel OR fringe)" --raw --parser ocr -
 
 Hits return locator, parser, page, and character offsets. Stages can also call `ctx.search(...)` on the main thread.
 
+### Pruning Superseded Parses (`commissure prune`)
+Because a parser's version includes a hash of its source code and library versions, upgrading core or editing a parser causes the next `commissure run --step parse` to store new `extracted_text` rows beside the old ones. To clear superseded `text` and `structure` bodies that are not referenced by any `evidence` row while preserving `parser_version`, `text_hash`, drift classification, and stage staleness:
+
+```sh
+# 1. Back up workspace/state.db first (see "Keeping Verdicts" below)
+# 2. Preview rows and bytes that would be cleared, by parser
+uv run commissure prune --dry-run --json
+
+# 3. Clear superseded unreferenced bodies and compact state.db with VACUUM
+#    (--vacuum requires free disk space roughly equal to state.db)
+uv run commissure prune --vacuum --json
+```
+
+Run `commissure prune` after parser changes or a core upgrade that re-parsed the corpus. Every newest row per `(item_version_id, parser)` and every row named by `evidence` is kept intact, so `current_text` and all reviewed evidence spans continue to resolve. Without `--vacuum`, `commissure prune` frees pages inside `state.db` and reports how many bytes `VACUUM` would reclaim.
+
 ### Entities and Edges (graph)
 A stage emits graph rows beside its payload; core indexes them against the outcome, so only the current snapshot shows and a rerun supersedes it:
 
@@ -317,6 +336,31 @@ sqlite3 workspace/state.db ".dump review_samples review_instances verdicts" > re
 ```
 
 The tables are append-only and dump in row order, so each commit's diff is exactly the new samples and verdicts. It contains reviewer names and notes, and a solution's repository is its release, so commit it only where the client may see them. It is a record, not a restore path: its rows refer to this workspace's outcome ids and `item:<id>` subject keys, which a rebuilt workspace assigns differently, and it carries no append-only triggers. Never load it into another workspace; restore from a database backup.
+
+### Testing a Recipe (`commissure.testing`)
+
+Commissure registers a `pytest` plugin (`commissure.testing`) that provides the `commissure_run` fixture (an instance of `commissure.testing.Pipeline` bound to `tmp_path / "workspace"` and the solution's `recipe/`). Use it instead of wrapping `CliRunner` or querying `current_outcomes` / `current_records` in raw SQL:
+
+```python
+def test_extract_and_tally(commissure_run):
+    # Folders outside tmp_path (such as intake/<batch>) are copied into tmp_path first.
+    assert commissure_run.ingest("intake/comments", role="comment").exit_code == 0
+    for report in commissure_run.steps("parse", "extract", "tally").values():
+        assert report.exit_code == 0, report
+
+    # Current outcomes per stage, keyed by locator (item), group key (group), or "run" (run):
+    # each entry has .outcome, .reason, .codes, and .payload (also accessible as dict keys).
+    extract = commissure_run.records("extract")
+    assert extract["c09.html"].outcome == "warning"
+    assert extract["c09.html"].reason == "no_position_phrase"
+    assert extract["c10.html"].outcome == "quarantined"
+    assert extract["c23-scan.pdf"].outcome == "skipped"  # quarantined at parse -> no_text
+
+    tally = commissure_run.records("tally")["run"].payload
+    assert tally["comments"] == 21
+```
+
+For module-scoped pipelines (`tmp_path_factory`), construct `Pipeline(tmp / "workspace", ROOT / "recipe")` directly (`from commissure.testing import Pipeline`). Methods: `.load()`, `.ingest(source, role="corpus", *flags)`, `.parse(parser=None, *flags)`, `.stage(name, *flags)`, `.steps(*names)`, `.records(stage)`, `.review(subcommand, *args, reviewer=None)`, and `.workspace`. None of the runner methods assert on `.exit_code`, so tests can assert failure exit codes (`1`, `2`, `3`) directly.
 
 ---
 

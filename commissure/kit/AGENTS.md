@@ -1,6 +1,6 @@
 # Commissure: rules for recipe authors
 
-These are core's rules for anyone writing a solution on Commissure, and they bind core's own code too. Every invariant here applies without exception. A solution's own `AGENTS.md` and `recipe/AGENTS.md` add to them and never override them.
+These are core's rules for anyone writing a solution on Commissure, and they bind core's own code too. Every invariant here applies without exception. A solution's own `AGENTS.md`, its contract, adds to them and never overrides them.
 
 When code does something that looks arbitrary (a threshold, a refusal, a lock), the comment beside it says why, and a test fails if it is undone: read both before changing it. When you make such a choice, leave the same: a short comment at the site and a test. Docs describe the current state only; history is in git.
 
@@ -15,7 +15,7 @@ In a solution, this file and its siblings live in `.agents/commissure/` (copied 
 Use these exact nouns without inventing synonyms:
 
 - **Solution:** a project that depends on the `commissure` package and holds one operation: `pyproject.toml`, `recipe/`, `tests/`, `docs/`, `intake/`, and a local `workspace/`. Created by `commissure new`, its own git repository.
-- **Recipe:** the solution's `recipe/` folder: `recipe.py` declares `STAGES` (and optionally `INTERFACE`, `LIMITS`), `AGENTS.md` is its contract.
+- **Recipe:** the solution's `recipe/` folder: `recipe.py` declares `STAGES` (and optionally `INTERFACE`, `LIMITS`). The solution's `AGENTS.md` is the recipe's contract.
 - **Workspace:** `state.db`, `blobs/`, `outputs/`.
 - **Source:** a registered input folder. **Item:** one unit of input (file, JSON object, row). **Locator:** an item's address within its source. **Role:** a recipe-defined label on items (`corpus`, `reference`, `comment`).
 - **Stage:** one recipe step over one **Subject** kind: `item`, `group`, or `run`. **Run:** one stage invocation. **Outcome:** `valid`, `warning`, `quarantined`, or `skipped`, with diagnostics. **Record:** the validated typed payload for a subject.
@@ -35,7 +35,7 @@ Use these exact nouns without inventing synonyms:
 
 ## 3. Boundaries
 
-- **Public surface:** Recipes import only from `commissure.api` (and optionally `commissure.patterns`), never from internal core modules or provider SDKs. Tests may also use the internal modules these docs name for tests (`commissure.workspace.open_workspace`, `commissure.recipes.load_recipe`, `commissure.cli.app`). Needing any other internal import is a sign a core change is needed.
+- **Public surface:** Recipes import only from `commissure.api` (and optionally `commissure.patterns`), never from internal core modules or provider SDKs. Solution tests use `commissure.testing` (`commissure_run` and `Pipeline`; `commissure.workspace.open_workspace` and `commissure.recipes.load_recipe` remain available when needed). Needing any other internal import is a sign a core change is needed.
 - **Rule of Two:** Keep domain schemas, extraction rules, and helpers inside the solution's `recipe/`. A helper graduates to `commissure/patterns/` only when a second recipe needs it or the operator asks.
 - **Pre-ingest fetchers** (scripts that populate `intake/` and read `.env`) go in `recipe/tools/`.
 - **Scheduling belongs to the OS** (`cron`, `launchd`, `systemd`), supported by workspace lockfiles, `--trigger`, and deterministic exit codes (`0` ok/noop, `1` failed, `2` usage/config error, `3` locked).
@@ -83,7 +83,7 @@ Read the matching skill (`.agents/commissure/skills/`, linked in `.claude/skills
 | Task | How | Core rules |
 | --- | --- | --- |
 | Start a solution | `commissure new <dir>` (`--example` for a working one) | Hand the operator `docs/notes.md` and `intake/` to fill, and stop. |
-| Reconnaissance & `recipe/AGENTS.md` | skill `investigate-solution` | Read `docs/README.md`, run `probe`, parse a `/tmp` scratch workspace (plus `--parser ocr` when needed), run `recon`, and complete `recipe/AGENTS.md` before writing stage code. |
+| Reconnaissance & the contract (`AGENTS.md`) | skill `investigate-solution` | Read `docs/README.md`, run `probe`, parse a `/tmp` scratch workspace (plus `--parser ocr` when needed), run `recon`, and complete the contract sections of `AGENTS.md` before writing stage code. |
 | Build or extend a stage, deliverable, or `INTERFACE` | skill `build-recipe-stage` | Express schemas (`extra="forbid"`) and deterministic extraction first; use `ctx.llm` only for residue requiring judgment. Iterate with `--limit` and `--json` (`workers=1` default on local LLMs), inspect via `commissure inspect`, and write proven-to-fail tests. |
 | Upgrade core | `uv lock --upgrade-package commissure && uv sync`, then `uv run commissure agent-kit` | Read every **Upgrading** entry in core's `CHANGELOG.md` since the old version (`https://github.com/sebastientaggart/commissure/blob/v<version>/CHANGELOG.md`) and act on those that apply before fixing tests by other means; then `uv run pytest`. |
 | Release | bump `version` in `pyproject.toml`, `CHANGELOG.md` entry, tag `v<version>` | `uv run pytest` passes first; the repository at the tag is the release. Tag and push only when told. |
@@ -93,5 +93,5 @@ Read the matching skill (`.agents/commissure/skills/`, linked in `.claude/skills
 ## 7. Tests
 
 - Solution tests and small synthetic fixtures live in `tests/` (`uv run pytest`). Input fixtures are copied into `tmp_path` before use and never modified in place.
-- Load the recipe with `load_recipe` (the production path) and build workspaces with `open_workspace` or the CLI (`commissure.cli.app` through `typer.testing.CliRunner`). The example solution's `tests/test_recipe.py` (`commissure new <dir> --example`) runs ingest, parse, and stages that way over a copy of its corpus.
+- Drive the recipe with the `commissure_run` pytest fixture (or `commissure.testing.Pipeline`), which runs the CLI against a scratch workspace and reads current outcomes and payloads through `.records(stage)` without hand-assembling `CliRunner` calls or raw SQL against core's tables. The example solution's `tests/test_recipe.py` (`commissure new <dir> --example`) runs ingest, parse, and stages that way over a copy of its corpus.
 - No test reaches outside the solution folder, and no fixture holds client data that may not be committed.

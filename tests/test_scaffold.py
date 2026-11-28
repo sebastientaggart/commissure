@@ -43,12 +43,9 @@ EXPECTED = {
     "docs/notes.md",
     "intake/README.md",
     "recipe/__init__.py",
-    "recipe/AGENTS.md",
     "recipe/recipe.py",
     "recipe/schema.py",
     "recipe/extract.py",
-    "recipe/analyze.py",
-    "recipe/deliver.py",
     "tests/test_recipe.py",
 }
 SKILLS = {"build-recipe-stage", "investigate-solution"}
@@ -83,7 +80,7 @@ def test_new_creates_the_documented_layout(cli, tmp_path):
     assert not [p for p in sol.rglob("_*") if p.name != "__init__.py"]
     assert 'name = "acme-monthly"' in (sol / "pyproject.toml").read_text()
     assert f'dependencies = ["{requirement()}"]' in (sol / "pyproject.toml").read_text()
-    assert "# Recipe: `acme-monthly`" in (sol / "recipe" / "AGENTS.md").read_text()
+    assert (sol / "AGENTS.md").read_text().startswith("# acme-monthly\n")
     assert (sol / "CLAUDE.md").read_text().split() == [
         "@AGENTS.md",
         "@.agents/commissure/AGENTS.md",
@@ -189,6 +186,7 @@ def test_scaffold_gitignore_drops_client_data_and_keeps_the_agent_kit(cli, tmp_p
     (sol / "docs" / "plans" / "scratch.md").write_text("plan\n")
     (sol / "docs" / "plan-scratch.md").write_text("plan\n")
     (sol / ".claude" / "settings.local.json").write_text("{}\n")
+    (sol / "CLAUDE.local.md").write_text("machine notes\n")
 
     tracked = _git_add(sol)
     assert {
@@ -206,6 +204,7 @@ def test_scaffold_gitignore_drops_client_data_and_keeps_the_agent_kit(cli, tmp_p
         "docs/plans/scratch.md",
         "docs/plan-scratch.md",
         ".claude/settings.local.json",
+        "CLAUDE.local.md",
     }.isdisjoint(tracked)
 
 
@@ -268,7 +267,7 @@ def test_agent_kit_replaces_only_the_kit(cli, tmp_path, monkeypatch):
     own.mkdir()
     (own / "SKILL.md").write_text("mine\n")
     (sol / SKILLS_DIR / "shared").symlink_to("../../somewhere/else")
-    (sol / "recipe" / "AGENTS.md").write_text("contract\n")
+    (sol / "AGENTS.md").write_text("contract\n")
 
     monkeypatch.chdir(sol)
     result = cli("agent-kit", "--json")
@@ -279,7 +278,7 @@ def test_agent_kit_replaces_only_the_kit(cli, tmp_path, monkeypatch):
     assert not (sol / SKILLS_DIR / "retired-skill").is_symlink()
     assert (own / "SKILL.md").read_text() == "mine\n"
     assert os.readlink(sol / SKILLS_DIR / "shared") == "../../somewhere/else"
-    assert (sol / "recipe" / "AGENTS.md").read_text() == "contract\n"
+    assert (sol / "AGENTS.md").read_text() == "contract\n"
     for skill in kit_skills():
         link = sol / SKILLS_DIR / skill
         assert os.readlink(link) == SKILL_LINK + skill
@@ -318,8 +317,8 @@ def test_templates_and_kit_are_what_new_writes():
     example = template_files("example")
     kept = {r for r in EXPECTED if r.split("/")[0] not in ("recipe", "tests")}
     assert kept <= set(example)
-    assert {"recipe/recipe.py", "recipe/AGENTS.md", "tests/test_recipe.py"} <= set(example)
-    assert not {"recipe/analyze.py", "recipe/deliver.py"} & set(example)
+    assert {"recipe/recipe.py", "recipe/tally.py", "tests/test_recipe.py"} <= set(example)
+    assert not [r for r in example if r.endswith("AGENTS.md") and r != "AGENTS.md"]
     assert all(
         p.is_relative_to(TEMPLATES["example"])
         for r, p in example.items()
@@ -374,3 +373,26 @@ def test_new_project_syncs_tests_and_lints_against_the_built_wheel(tmp_path, kin
     ):
         out = _uv(sol, *args, env=env)
         assert out.returncode == 0, (args, out.stdout[-2000:], out.stderr[-2000:])
+
+
+def test_one_contract_per_solution_and_the_example_shares_its_header():
+    """The contract is the solution's AGENTS.md, and nothing else is: no recipe/AGENTS.md. The
+    example's contract is finished, but its "Working here" section is the project's, word for
+    word, so the two templates can't drift apart."""
+
+    def working_here(text: str) -> str:
+        return text[text.index("## Working here") : text.index("## Purpose")]
+
+    project = (TEMPLATES["project"] / "_AGENTS.md").read_text()
+    example = (TEMPLATES["example"] / "_AGENTS.md").read_text()
+    assert working_here(project) == working_here(example)
+    for kind in ("project", "example"):
+        sections = [
+            line
+            for line in TEMPLATES[kind].joinpath("_AGENTS.md").read_text().splitlines()
+            if line.startswith("## ")
+        ]
+        assert sections == [
+            "## Working here", "## Purpose", "## Inputs", "## Domain rules",
+            "## Quarantine rules", "## Acceptance gate", "## Definition of done",
+        ], kind  # fmt: skip

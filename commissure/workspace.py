@@ -24,6 +24,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 DB_NAME = "state.db"
 BLOBS_DIR = "blobs"
@@ -921,6 +922,61 @@ MIGRATIONS: list[str] = [
                           )))
     );
     """,
+    # 10: pruning superseded extracted_text bodies (`extracted_text.pruned_at`,
+    # `commissure prune`). The row, its text_hash, and its parse outcome stay so drift and
+    # input_stale comparisons are unchanged; current_text reads only unpruned rows and
+    # evidence_review never slices a pruned body as empty text.
+    """
+    ALTER TABLE extracted_text ADD COLUMN pruned_at TEXT;
+    CREATE INDEX evidence_extracted_text ON evidence (extracted_text_id);
+
+    DROP VIEW current_text;
+    CREATE VIEW current_text AS
+    SELECT ci.item_id, ci.source_id, ci.locator, ci.role, ci.item_version_id,
+           et.id AS extracted_text_id, et.parser, et.parser_version, et.text_hash,
+           et.text, et.structure, et.run_id,
+           (SELECT o.stage_fp FROM outcomes o
+            WHERE o.stage = 'parse.' || et.parser AND o.item_version_id = et.item_version_id
+            ORDER BY o.id DESC LIMIT 1) IS NOT et.parser_version AS stale
+    FROM current_items ci
+    JOIN extracted_text et ON et.item_version_id = ci.item_version_id
+    WHERE et.pruned_at IS NULL
+      AND et.id = (SELECT max(e2.id) FROM extracted_text e2
+                   WHERE e2.item_version_id = et.item_version_id
+                     AND e2.parser = et.parser
+                     AND e2.pruned_at IS NULL);
+
+    DROP VIEW evidence_review;
+    CREATE VIEW evidence_review AS
+    SELECT co.outcome_id, co.run_id, co.stage, co.subject_kind, co.subject_key, co.outcome,
+           'record' AS origin, e.id AS evidence_id, e.pointer, e.kind, e.copied,
+           e.item_version_id, i.source_id, s.uri AS source_uri, i.locator, v.bytes_hash,
+           e.extracted_text_id, e.span_start, e.span_end, e.page, e.via_ocr, e.confidence,
+           CASE WHEN e.span_start IS NOT NULL AND t.pruned_at IS NULL
+                THEN substr(t.text, e.span_start + 1, e.span_end - e.span_start) END
+               AS span_text
+    FROM current_outcomes co
+    JOIN evidence e ON e.record_id = co.record_id
+    JOIN item_versions v ON v.id = e.item_version_id
+    JOIN items i ON i.id = v.item_id
+    JOIN sources s ON s.id = i.source_id
+    LEFT JOIN extracted_text t ON t.id = e.extracted_text_id
+    UNION ALL
+    SELECT co.outcome_id, co.run_id, co.stage, co.subject_kind, co.subject_key, co.outcome,
+           'parse', NULL, NULL, json_extract(d.value, '$.code'), 0,
+           co.item_version_id, i.source_id, s.uri, i.locator, v.bytes_hash,
+           co.extracted_text_id, NULL, NULL, p.value,
+           json_extract(d.value, '$.code') = 'ocr_pages',
+           json_extract(d.value, '$.detail.confidence."' || p.value || '"'),
+           NULL
+    FROM current_outcomes co
+    JOIN json_each(co.diagnostics) d
+    JOIN json_each(json_extract(d.value, '$.detail.pages')) p
+    JOIN item_versions v ON v.id = co.item_version_id
+    JOIN items i ON i.id = v.item_id
+    JOIN sources s ON s.id = i.source_id
+    WHERE co.stage LIKE 'parse.%';
+    """,
 ]
 
 
@@ -1171,3 +1227,109 @@ def open_workspace(root: Path) -> Workspace:
     outputs = root / OUTPUTS_DIR
     outputs.mkdir(exist_ok=True)
     return Workspace(root=root, conn=conn, blobs=blobs, outputs=outputs)
+
+
+_PRUNABLE_WHERE = """
+et.pruned_at IS NULL
+AND et.id < (
+    SELECT max(e2.id) FROM extracted_text e2
+    WHERE e2.item_version_id = et.item_version_id AND e2.parser = et.parser
+)
+AND NOT EXISTS (
+    SELECT 1 FROM evidence ev WHERE ev.extracted_text_id = et.id
+)
+"""
+
+
+def prune_workspace(
+    ws: Workspace,
+    *,
+    dry_run: bool = False,
+    vacuum: bool = False,
+) -> dict[str, Any]:
+    """Clear superseded unreferenced `extracted_text` bodies (`text`, `structure`).
+
+    Keeps the `extracted_text` row (`parser`, `parser_version`, `text_hash`, `run_id`,
+    `created_at`, `pruned_at`) so foreign keys from `outcomes` and `evidence` and hash
+    comparisons (`drift.change_kind`, `current_outcomes.input_stale`) stay intact.
+    """
+    conn = ws.conn
+    db_path = ws.root / DB_NAME
+    by_parser = [
+        {"parser": r["parser"], "rows": r["rows"], "bytes": r["bytes"]}
+        for r in conn.execute(
+            f"""
+            SELECT et.parser,
+                   count(*) AS rows,
+                   coalesce(sum(octet_length(et.text) + octet_length(et.structure)), 0) AS bytes
+            FROM extracted_text et
+            WHERE {_PRUNABLE_WHERE}
+            GROUP BY et.parser
+            ORDER BY et.parser
+            """
+        )
+    ]
+    pruned_rows = sum(p["rows"] for p in by_parser)
+    pruned_bytes = sum(p["bytes"] for p in by_parser)
+
+    page_size = conn.execute("PRAGMA page_size").fetchone()[0]
+    freelist_before = conn.execute("PRAGMA freelist_count").fetchone()[0]
+    db_bytes_before = db_path.stat().st_size
+
+    if dry_run:
+        return {
+            "workspace": str(ws.root),
+            "dry_run": True,
+            "vacuum": False,
+            "pruned_rows": pruned_rows,
+            "pruned_bytes": pruned_bytes,
+            "by_parser": by_parser,
+            "reclaimable_bytes": freelist_before * page_size + pruned_bytes,
+            "reclaimed_bytes": None,
+            "db_bytes_before": db_bytes_before,
+            "db_bytes_after": db_bytes_before,
+        }
+
+    if pruned_rows > 0:
+        now = utc_now()
+        with transaction(conn):
+            conn.execute(
+                f"""
+                UPDATE extracted_text
+                SET text = '', structure = '{{}}', pruned_at = ?
+                WHERE id IN (
+                    SELECT et.id FROM extracted_text et WHERE {_PRUNABLE_WHERE}
+                )
+                """,
+                (now,),
+            )
+            # Merge FTS5 b-tree segments so deleted token postings are released to the
+            # SQLite freelist rather than sitting in unmerged FTS5 segments.
+            conn.execute("INSERT INTO extracted_text_fts(extracted_text_fts) VALUES('optimize')")
+
+    did_vacuum = False
+    reclaimed_bytes: int | None = None
+    if vacuum:
+        conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        db_bytes_before = db_path.stat().st_size
+        conn.execute("VACUUM")
+        conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        did_vacuum = True
+        db_bytes_after = db_path.stat().st_size
+        reclaimed_bytes = max(0, db_bytes_before - db_bytes_after)
+    else:
+        db_bytes_after = db_path.stat().st_size
+
+    freelist_after = conn.execute("PRAGMA freelist_count").fetchone()[0]
+    return {
+        "workspace": str(ws.root),
+        "dry_run": False,
+        "vacuum": did_vacuum,
+        "pruned_rows": pruned_rows,
+        "pruned_bytes": pruned_bytes,
+        "by_parser": by_parser,
+        "reclaimable_bytes": freelist_after * page_size,
+        "reclaimed_bytes": reclaimed_bytes,
+        "db_bytes_before": db_bytes_before,
+        "db_bytes_after": db_bytes_after,
+    }

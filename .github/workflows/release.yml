@@ -42,5 +42,8 @@ jobs:
       - name: Build
         run: uv build
 
+      - name: Attest
+        uses: astral-sh/attest-action@v0
+
       - name: Publish to PyPI
         run: uv publish --trusted-publishing always

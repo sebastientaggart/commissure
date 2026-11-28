@@ -12,8 +12,8 @@ A solution is a project of its own: a git repository with a `pyproject.toml` tha
    - **Agent (when scripted download is needed):** Writes fetchers in `recipe/tools/` (Section 2).
    - **Operator / SME:** Runs fetchers or places files in `intake/<source>/`, checks manifests, and curates before ingest.
 3. **Investigate (skill [`investigate-solution`](../skills/investigate-solution/SKILL.md))**
-   - **Agent:** Probes `intake/`, parses a `/tmp` scratch workspace, runs `commissure recon`, fills `recipe/AGENTS.md`, and stops.
-   - **Operator:** Reviews and approves `recipe/AGENTS.md`, resolves open questions, and approves thresholds and any `allow_remote=True`.
+   - **Agent:** Probes `intake/`, parses a `/tmp` scratch workspace, runs `commissure recon`, fills the contract sections of `AGENTS.md`, and stops.
+   - **Operator:** Reviews and approves the contract (`AGENTS.md`), resolves open questions, and approves thresholds and any `allow_remote=True`.
 4. **Build (skill [`build-recipe-stage`](../skills/build-recipe-stage/SKILL.md))**
    - **Agent:** Builds one stage (or `INTERFACE`) at a time in `recipe/`, tests on a slice, adds proven-to-fail tests in `tests/`, updates the README's run commands, and stops.
    - **Operator / SME:** Inspects outputs, grades random samples in `/review` (`commissure serve` or `commissure review`), and approves the next stage.
