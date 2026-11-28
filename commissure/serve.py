@@ -1071,7 +1071,7 @@ def build_view(
             " COALESCE((SELECT max(ct.run_id) FROM current_items ci"
             "  JOIN current_text ct ON ct.item_version_id = ci.item_version_id"
             "  WHERE ci.source_id = s.id), 0) AS latest_text_run_id"
-            " FROM sources s ORDER BY s.id"
+            " FROM sources s WHERE s.retired_at IS NULL ORDER BY s.id"
         ).fetchall()
         current_items = conn.execute(
             "SELECT item_id, item_version_id, source_id, locator, role, run_id"

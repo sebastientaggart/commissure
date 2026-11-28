@@ -721,6 +721,215 @@ def test_sources_relocate_and_ingest_stale_source_warning(cli, tmp_path):
     ]
 
 
+def test_relocate_counts_group_review_via_lineage_and_retire_resolves_collision(cli, tmp_path):
+    from commissure.workspace import transaction
+
+    sol = tmp_path / "sol"
+    ws_root = sol / "workspace"
+    batch = sol / "intake" / "batch"
+    batch.mkdir(parents=True)
+    (batch / "a.html").write_text("<main>alpha one</main>\n")
+    (batch / "b.html").write_text("<main>alpha two</main>\n")
+
+    recipe_dir = sol / "recipe"
+    recipe_dir.mkdir(parents=True)
+    (recipe_dir / "recipe.py").write_text(
+        "from pydantic import BaseModel, ConfigDict\n"
+        "from commissure.api import Check, Stage\n"
+        "class ItemOut(BaseModel):\n"
+        "    model_config = ConfigDict(extra='forbid')\n"
+        "    group_key: str\n"
+        "class GroupOut(BaseModel):\n"
+        "    model_config = ConfigDict(extra='forbid')\n"
+        "    count: int\n"
+        "def extract(ctx, item):\n"
+        "    return ItemOut(group_key=item.text.split()[0])\n"
+        "def summary(ctx, group):\n"
+        "    return GroupOut(count=len(group.items))\n"
+        "STAGES = [\n"
+        "    Stage('extract', extract, schema=ItemOut, text='default'),\n"
+        "    Stage('summary', summary, schema=GroupOut, subject='group', needs=('extract',),\n"
+        "          group_by=lambda item: item.upstream['extract'].group_key,\n"
+        "          checks=(Check('/count', 'Is the group count right?'),)),\n"
+        "]\n"
+    )
+
+    # 1. Ingest intake/batch, run parse + extract + summary, draw a sample on summary,
+    # and record 1 verdict.
+    assert cli.ingest(ws_root, batch)[0] == 0
+    assert cli("run", "--step", "parse", "--workspace", str(ws_root)).exit_code == 0
+    assert (
+        cli(
+            "run", "--step", "extract", "--workspace", str(ws_root), "--recipe", str(recipe_dir)
+        ).exit_code
+        == 0
+    )
+    assert (
+        cli(
+            "run", "--step", "summary", "--workspace", str(ws_root), "--recipe", str(recipe_dir)
+        ).exit_code
+        == 0
+    )
+    assert (
+        cli(
+            "review",
+            "sample",
+            "--workspace",
+            str(ws_root),
+            "--recipe",
+            str(recipe_dir),
+            "--check",
+            "summary:/count",
+            "--n",
+            "1",
+            "--seed",
+            "1",
+            "--reviewer",
+            "alice",
+        ).exit_code
+        == 0
+    )
+    assert (
+        cli(
+            "review", "record", "1", "correct", "--workspace", str(ws_root), "--reviewer", "alice"
+        ).exit_code
+        == 0
+    )
+
+    # 2. Simulate a pre-#2 workspace that moved: point source #1 at an old dead absolute path,
+    # then ingest the folder at its real path (creating duplicate source #2) and run stages.
+    dead_sol = tmp_path / "old_loc" / "sol"
+    dead_batch = dead_sol / "intake" / "batch"
+    ws = open_workspace(ws_root)
+    with transaction(ws.conn):
+        ws.conn.execute("UPDATE sources SET uri = ? WHERE id = 1", (str(dead_batch),))
+    ws.close()
+
+    assert cli.ingest(ws_root, batch)[0] == 0
+    assert _query(ws_root, "SELECT count(*) AS n FROM current_items")[0]["n"] == 4
+    assert cli("run", "--step", "parse", "--workspace", str(ws_root)).exit_code == 0
+    assert (
+        cli(
+            "run", "--step", "extract", "--workspace", str(ws_root), "--recipe", str(recipe_dir)
+        ).exit_code
+        == 0
+    )
+    assert (
+        cli(
+            "run", "--step", "summary", "--workspace", str(ws_root), "--recipe", str(recipe_dir)
+        ).exit_code
+        == 0
+    )
+
+    # 3. `sources relocate` refuses on collision, reports 1 verdict instance and 1 verdict
+    # for source #1 through its downstream group stage `summary`, and suggests `sources retire`.
+    r_col = cli("sources", "relocate", str(dead_sol), str(sol), "--workspace", str(ws_root))
+    assert r_col.exit_code == 2
+    assert "1 verdict instance(s), 1 verdict(s)" in r_col.output
+    assert "commissure sources retire" in r_col.output
+
+    # 4. `sources retire` refuses a source with review in its lineage (#1), and refuses
+    # unknown (#99).
+    r_refuse_reviewed = cli("sources", "retire", "1", "--workspace", str(ws_root))
+    assert r_refuse_reviewed.exit_code == 2
+    assert "1 verdict instance(s)" in r_refuse_reviewed.output
+    r_refuse_unknown = cli("sources", "retire", "99", "--workspace", str(ws_root))
+    assert r_refuse_unknown.exit_code == 2
+
+    def table_counts() -> dict[str, int]:
+        return {
+            t: _query(ws_root, f"SELECT count(*) AS n FROM {t}")[0]["n"]
+            for t in (
+                "sources",
+                "items",
+                "item_versions",
+                "outcomes",
+                "evidence",
+                "review_instances",
+                "verdicts",
+            )
+        }
+
+    before = table_counts()
+
+    # 5. `--dry-run` on source #2 reports counts and writes nothing.
+    # Note: source #2 feeds the latest `summary` run (run #7), while the review instance
+    # is attached to the earlier `summary` outcome from run #4 (fed only by source #1).
+    r_dry = cli("sources", "retire", "2", "--workspace", str(ws_root), "--dry-run", "--json")
+    assert r_dry.exit_code == 0, r_dry.output
+    dry_payload = json.loads(r_dry.stdout)
+    assert dry_payload["dry_run"] is True
+    assert dry_payload["tombstoned"] == 2
+    assert dry_payload["counts"]["items"] == 2
+    assert dry_payload["counts"]["verdict_instances"] == 0
+    assert table_counts() == before
+    assert _query(ws_root, "SELECT count(*) AS n FROM current_items")[0]["n"] == 4
+
+    # 6. Retire duplicate source #2: leaves 1 current copy of each item; row counts never drop
+    # (2 tombstone item_versions added). Refuses retiring #2 a second time.
+    r_ret = cli("sources", "retire", "2", "--workspace", str(ws_root), "--json")
+    assert r_ret.exit_code == 0, r_ret.output
+    after = table_counts()
+    for t in ("sources", "items", "outcomes", "evidence", "review_instances", "verdicts"):
+        assert after[t] == before[t]
+    assert after["item_versions"] == before["item_versions"] + 2
+    assert _query(ws_root, "SELECT count(*) AS n FROM current_items")[0]["n"] == 2
+    assert cli("sources", "retire", "2", "--workspace", str(ws_root)).exit_code == 2
+
+    # 7. After retire, relocate of source #1 onto intake/batch succeeds (the retired row's
+    # uri = 'intake/batch' does not block the UNIQUE index or collide in relocate).
+    r_rel = cli(
+        "sources", "relocate", str(dead_sol), str(sol), "--workspace", str(ws_root), "--json"
+    )
+    assert r_rel.exit_code == 0, r_rel.output
+    assert json.loads(r_rel.stdout)["relocated"] == [
+        {"id": 1, "old_uri": str(dead_batch), "new_uri": "intake/batch"}
+    ]
+
+    # 8. Item stages (`parse.*`, `extract`) are fresh for kept source #1, while downstream
+    # stage `summary` over the retired items is marked input_stale.
+    insp = json.loads(cli("inspect", "--workspace", str(ws_root), "--json").stdout)["workspaces"][0]
+    by_stage = {r["stage"]: r for r in insp["outcomes"]}
+    assert (
+        by_stage["parse.html"]["version_stale"] == 0 and by_stage["parse.html"]["input_stale"] == 0
+    )
+    assert (
+        by_stage["recipe.extract"]["version_stale"] == 0
+        and by_stage["recipe.extract"]["input_stale"] == 0
+    )
+    assert by_stage["recipe.summary"]["input_stale"] == 1
+
+    # 9. Re-ingesting intake/batch neither reactivates retired source #2 nor creates a
+    # duplicate source; it matches kept source #1 as a clean noop.
+    code_ing, rep_ing = cli.ingest(ws_root, batch)
+    assert code_ing == 0 and rep_ing["status"] == "noop" and rep_ing["source_id"] == 1
+    assert _query(
+        ws_root, "SELECT id, uri, retired_at IS NOT NULL AS retired FROM sources ORDER BY id"
+    ) == [
+        {"id": 1, "uri": "intake/batch", "retired": 0},
+        {"id": 2, "uri": "intake/batch", "retired": 1},
+    ]
+
+    # Running `summary` refreshes the group record over the kept source's 2 items only.
+    assert (
+        cli(
+            "run", "--step", "summary", "--workspace", str(ws_root), "--recipe", str(recipe_dir)
+        ).exit_code
+        == 0
+    )
+    insp2 = json.loads(cli("inspect", "--workspace", str(ws_root), "--json").stdout)["workspaces"][
+        0
+    ]
+    by_stage2 = {r["stage"]: r for r in insp2["outcomes"]}
+    assert by_stage2["recipe.summary"]["input_stale"] == 0
+    rec_payload = json.loads(
+        _query(ws_root, "SELECT payload FROM current_records WHERE stage = 'recipe.summary'")[0][
+            "payload"
+        ]
+    )
+    assert rec_payload == {"count": 2}
+
+
 def test_unmoved_absolute_source_from_older_workspace_is_adopted_not_duplicated(cli, tmp_path):
     # A workspace written before relative storage holds the same, still-valid folder as an
     # absolute path. The next ingest must reuse that source (rewritten to the relative form),

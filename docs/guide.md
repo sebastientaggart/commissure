@@ -189,6 +189,11 @@ uv run commissure run --step ingest --source intake/<batch> --role corpus --json
 #    rewrite stored folder paths in place while keeping source IDs, items, and verdicts:
 uv run commissure sources relocate /old/path /new/path --dry-run --json
 uv run commissure sources relocate /old/path /new/path --json
+#    If an ingest already ran at the new path and created a duplicate source, retire the
+#    unreviewed duplicate (tombstoning its current items and setting sources.retired_at),
+#    then relocate the original source:
+uv run commissure sources retire <duplicate-source-id> --dry-run --json
+uv run commissure sources retire <duplicate-source-id> --json
 
 # 3. Parse current items into structured blocks, tables, and FTS5-indexed text
 uv run commissure run --step parse --json

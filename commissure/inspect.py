@@ -574,7 +574,7 @@ def _counts(conn: sqlite3.Connection) -> dict[str, Any]:
     row = conn.execute(
         """
         SELECT
-            (SELECT count(*) FROM sources) AS sources,
+            (SELECT count(*) FROM sources WHERE retired_at IS NULL) AS sources,
             (SELECT count(*) FROM current_items) AS current_items,
             (SELECT count(*) FROM item_versions) AS item_versions,
             (SELECT count(*) FROM item_versions WHERE tombstone = 1) AS tombstones,
@@ -743,7 +743,7 @@ def _resolve_subject_keys(
             keys.add(f"item:{subj}")
         sql = (
             "SELECT i.id, i.locator, s.uri FROM items i JOIN sources s ON s.id = i.source_id"
-            " WHERE {} ORDER BY i.id"
+            " WHERE s.retired_at IS NULL AND {} ORDER BY i.id"
         )
         matches = conn.execute(sql.format("i.locator = ?"), (subj,)).fetchall()
         if not matches:

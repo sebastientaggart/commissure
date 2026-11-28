@@ -13,6 +13,7 @@ Commands (in `solutions/<name>/`, `--recipe` and `--workspace` default to `recip
                        [--call ID] [--only-errors] [--limit N] [--json]
     commissure search <query> [--workspace W] [--limit N] [--json]
     commissure sources relocate <old> <new> [--workspace W] [--dry-run] [--json]
+    commissure sources retire <source-id> [--workspace W] [--dry-run] [--json]
     commissure serve [--recipe R] [--workspace W] [--host 127.0.0.1] [--port 8000]
     commissure release build <target> [--skip-tests] [--offline] [--allow-dirty] [--json]
     commissure release publish <target> [--tarball] [--push] [--json]
@@ -42,7 +43,13 @@ from rich.markup import escape
 from rich.table import Table
 
 from commissure import review
-from commissure.ingest import check_folder_source, effective_ignore, ingest_folder, relocate_sources
+from commissure.ingest import (
+    check_folder_source,
+    effective_ignore,
+    ingest_folder,
+    relocate_sources,
+    retire_source,
+)
 from commissure.inspect import _resolve_subject_keys, inspect_workspaces, open_readonly
 from commissure.inspect import render as render_inspect
 from commissure.limits import LimitExceeded, resolve_limits
@@ -994,6 +1001,53 @@ def sources_relocate(
         verb = "would relocate" if dry_run else "relocated"
         for entry in relocated:
             typer.echo(f"{verb} source #{entry['id']}: {entry['old_uri']} -> {entry['new_uri']}")
+    raise typer.Exit(EXIT_OK)
+
+
+@sources_app.command("retire")
+def sources_retire(
+    source_id: Annotated[int, typer.Argument(help="Id of the source to retire.")],
+    workspace: Annotated[
+        Path | None,
+        typer.Option(envvar="COMMISSURE_WORKSPACE", help="Workspace directory."),
+    ] = None,
+    dry_run: Annotated[
+        bool,
+        typer.Option("--dry-run", help="Check and report counts without modifying state.db."),
+    ] = False,
+    as_json: AsJson = False,
+) -> None:
+    """Tombstone every current item of a source and mark the source retired."""
+    root = _search_root(workspace).resolve()
+    if not root.is_dir():
+        _fail_usage(f"workspace path {root} is not a directory")
+    if not (root / DB_NAME).is_file():
+        _fail_usage(f"{root} has no {DB_NAME}")
+    try:
+        with lock(root):
+            ws = open_workspace(root)
+            try:
+                out = retire_source(ws, source_id, dry_run=dry_run)
+            finally:
+                ws.close()
+    except WorkspaceLocked as exc:
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(EXIT_LOCKED) from None
+    except (WorkspaceError, ValueError) as exc:
+        _fail_usage(str(exc))
+    report = {"workspace": str(root), "dry_run": dry_run, **out}
+    if as_json:
+        typer.echo(json.dumps(report, indent=2))
+    else:
+        verb = "would retire" if dry_run else "retired"
+        c = out["counts"]
+        typer.echo(
+            f"{verb} source #{out['source_id']} ({out['uri']}): "
+            f"{out['tombstoned']} current item(s) tombstoned "
+            f"({c['items']} item(s), {c['outcomes']} outcome(s), "
+            f"{c['verdict_instances']} verdict instance(s), {c['verdicts']} verdict(s) in lineage; "
+            f"{out['note']})"
+        )
     raise typer.Exit(EXIT_OK)
 
 

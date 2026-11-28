@@ -824,6 +824,103 @@ MIGRATIONS: list[str] = [
     LEFT JOIN entities se ON se.id = g.source_entity_id
     LEFT JOIN entities te ON te.id = g.target_entity_id;
     """,
+    # 9: source retirement (`sources.retired_at`, partial unique index on active sources)
+    # and downstream `input_stale` when a consumed item is tombstoned or superseded.
+    """
+    PRAGMA legacy_alter_table = ON;
+    CREATE TABLE sources_new (
+        id          INTEGER PRIMARY KEY,
+        kind        TEXT NOT NULL,
+        uri         TEXT NOT NULL,
+        role        TEXT NOT NULL,
+        created_at  TEXT NOT NULL,
+        retired_at  TEXT
+    );
+    INSERT INTO sources_new (id, kind, uri, role, created_at)
+        SELECT id, kind, uri, role, created_at FROM sources;
+    DROP TABLE sources;
+    ALTER TABLE sources_new RENAME TO sources;
+    CREATE UNIQUE INDEX sources_active_kind_uri
+        ON sources (kind, uri) WHERE retired_at IS NULL;
+    PRAGMA legacy_alter_table = OFF;
+
+    DROP VIEW current_outcomes;
+    CREATE VIEW current_outcomes AS
+    WITH RECURSIVE latest_snapshot(step, run_id) AS (
+        SELECT r.step, max(r.id)
+        FROM runs r
+        WHERE r.remaining = 0
+        GROUP BY r.step
+        UNION ALL
+        SELECT ls.step, r.resumes_run_id
+        FROM latest_snapshot ls
+        JOIN runs r ON r.id = ls.run_id
+        WHERE r.resumes_run_id IS NOT NULL
+    )
+    SELECT o.id AS outcome_id, o.run_id, o.stage, o.subject_kind, o.subject_key,
+           o.item_version_id, o.outcome, o.reason_code, o.diagnostics, o.record_id,
+           o.extracted_text_id, o.input_fp, o.stage_fp, o.params,
+           CASE WHEN o.subject_kind = 'item' AND o.stage != 'ingest'
+                THEN o.item_version_id IS NOT ci.item_version_id ELSE 0 END AS version_stale,
+           (s.stage_fp IS NOT NULL AND s.stage_fp != o.stage_fp) AS code_stale,
+           (s.params IS NOT NULL AND s.params != o.params) AS params_stale,
+           EXISTS (WITH RECURSIVE up(id) AS (
+                       SELECT oi.upstream_outcome_id FROM outcome_inputs oi
+                       WHERE oi.outcome_id = o.id
+                       UNION
+                       SELECT oi.upstream_outcome_id FROM outcome_inputs oi
+                       JOIN up ON oi.outcome_id = up.id
+                       JOIN outcomes mid ON mid.id = up.id
+                       WHERE mid.id = (
+                           SELECT max(m2.id) FROM outcomes m2
+                           WHERE m2.stage = mid.stage AND m2.subject_key = mid.subject_key
+                       )
+                   )
+                   SELECT 1 FROM up
+                   JOIN outcomes u ON u.id = up.id
+                   JOIN outcomes now ON now.id = (
+                       SELECT max(u2.id) FROM outcomes u2
+                       WHERE u2.stage = u.stage AND u2.subject_key = u.subject_key)
+                   LEFT JOIN current_items uci
+                          ON u.subject_kind = 'item'
+                         AND uci.item_id = CAST(substr(u.subject_key, 6) AS INTEGER)
+                   LEFT JOIN records ur ON ur.id = u.record_id
+                   LEFT JOIN records nr ON nr.id = now.record_id
+                   LEFT JOIN extracted_text ue ON ue.id = u.extracted_text_id
+                   LEFT JOIN extracted_text ne ON ne.id = now.extracted_text_id
+                   WHERE (u.subject_kind = 'item'
+                          AND uci.item_version_id IS NOT now.item_version_id)
+                      OR (now.id != u.id
+                          AND (now.outcome IN ('quarantined', 'skipped')
+                               OR coalesce(nr.payload_hash, ne.text_hash)
+                                  IS NOT coalesce(ur.payload_hash, ue.text_hash))))
+               AS input_stale
+    FROM outcomes o
+    LEFT JOIN stages s ON s.stage = o.stage
+    LEFT JOIN current_items ci
+           ON o.subject_kind = 'item' AND ci.item_id = CAST(substr(o.subject_key, 6) AS INTEGER)
+    WHERE (
+        (o.subject_kind = 'item' AND o.stage = 'ingest'
+         AND o.run_id = (
+             SELECT max(r.id) FROM runs r
+             JOIN items i2 ON i2.source_id = r.source_id
+             WHERE r.step = 'ingest'
+               AND 'item:' || i2.id = o.subject_key
+               AND (r.status IN ('succeeded', 'noop') OR r.quarantined > 0)
+         ))
+        OR (o.subject_kind = 'item' AND o.stage != 'ingest'
+            AND ci.item_id IS NOT NULL
+            AND o.id = (SELECT max(o2.id) FROM outcomes o2
+                        WHERE o2.stage = o.stage AND o2.subject_key = o.subject_key))
+        OR (o.subject_kind IN ('group', 'run')
+            AND o.run_id IN (SELECT run_id FROM latest_snapshot WHERE step = o.stage)
+            AND o.id = (SELECT max(o2.id) FROM outcomes o2
+                        WHERE o2.stage = o.stage AND o2.subject_key = o.subject_key
+                          AND o2.run_id IN (
+                              SELECT run_id FROM latest_snapshot WHERE step = o.stage
+                          )))
+    );
+    """,
 ]
 
 
@@ -912,16 +1009,22 @@ def init_schema(conn: sqlite3.Connection) -> int:
         )
     for version in range(current, len(MIGRATIONS)):
         # executescript would commit a pending transaction first, so the transaction
-        # and the version bump live inside the script and apply atomically.
+        # and the version bump live inside the script and apply atomically. Foreign keys
+        # are toggled outside the transaction so table-rebuilding migrations can replace
+        # referenced tables cleanly.
         script = (
+            f"PRAGMA foreign_keys = OFF;\n"
             f"BEGIN IMMEDIATE;\n{MIGRATIONS[version]}\n"
-            f"PRAGMA user_version = {version + 1};\nCOMMIT;"
+            f"PRAGMA user_version = {version + 1};\nCOMMIT;\n"
+            f"PRAGMA foreign_keys = ON;"
         )
         try:
             conn.executescript(script)
         except BaseException:
             if conn.in_transaction:
                 conn.execute("ROLLBACK")
+            conn.execute("PRAGMA legacy_alter_table = OFF")
+            conn.execute("PRAGMA foreign_keys = ON")
             raise
     return len(MIGRATIONS)
 
