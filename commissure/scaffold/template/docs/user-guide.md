@@ -6,6 +6,7 @@ For the analysts and subject-matter experts (SMEs) who run this solution. Comman
 2. **Check** what was collected against the manifests.
 3. **Curate**: an SME decides what belongs in the corpus and in which role.
 4. **Process**: ingest, parse, run the stages, and review the results.
+5. **Back up** the review verdicts.
 
 ## 1. Collect
 
@@ -64,3 +65,13 @@ Results:
 
 - **TODO:** `workspace/outputs/recipe.<stage>/<run>/<file>`: what it contains.
 - `uv run commissure serve`: local web interface (if defined) and `/review` for sampling and grading results.
+
+## 5. Back up
+
+Review verdicts are the only part of `workspace/` that cannot be rebuilt: they live in `workspace/state.db`. Back it up with SQLite's own copy, which is safe while a run or review is in progress:
+
+```bash
+sqlite3 workspace/state.db ".backup '/path/to/backups/state-$(date +%F).db'"
+```
+
+Never copy a live `state.db` with `cp` or a sync tool; point those at the backup file instead. To restore, stop Commissure, move the old `state.db`, `state.db-wal`, and `state.db-shm` aside, and copy the backup in as `workspace/state.db`.

@@ -291,6 +291,30 @@ uv run commissure serve --port 8000
 
 Opening `/review` in the browser provides the full sampling and grading workflow side-by-side with the sandboxed original document opened at the cited page and character span.
 
+### Keeping Verdicts
+
+Verdicts are the one original in a workspace. Everything else is rebuilt from `intake/` and the recipe, but samples and verdicts are human answers, and they live only in `workspace/state.db`. A rebuilt workspace starts with an empty verdict log. Commissure does not back them up, for the same reason it does not schedule runs: backups belong to the system owner's tools.
+
+**Back up `state.db` with SQLite's own backup.** It produces a consistent copy even while `run` or `review` is writing:
+
+```sh
+sqlite3 workspace/state.db ".backup '/path/to/backups/state-$(date +%F).db'"
+# or, compacted (refuses to overwrite an existing file):
+sqlite3 workspace/state.db "VACUUM INTO '/path/to/backups/state-$(date +%F).db'"
+```
+
+Never copy a live `state.db` with `cp` or a file-sync tool: committed changes can still sit in `state.db-wal`, and a copy without it is behind or corrupt. Point file-level backup tools (Time Machine, restic, rsync) at the `.backup` output, not at the live database, or use a SQLite replicator such as Litestream for continuous copies. `state.db` alone keeps every verdict; for a full restore without re-ingesting, back up the whole workspace the same way (`blobs/` holds the ingested bytes the review page shows).
+
+To restore, stop `run` and `serve`, move the old `state.db`, `state.db-wal`, and `state.db-shm` aside, and copy the backup in as `workspace/state.db`. A leftover `-wal` file beside a restored database can corrupt it.
+
+**Keep a text record in git (optional).** The verdict log is small even when `state.db` is gigabytes, and a dump of it is a readable, diffable record of who judged what:
+
+```sh
+sqlite3 workspace/state.db ".dump review_samples review_instances verdicts" > review/verdicts.sql
+```
+
+The tables are append-only and dump in row order, so each commit's diff is exactly the new samples and verdicts. It contains reviewer names and notes, and it stays out of releases unless `release.toml` includes it. It is a record, not a restore path: its rows refer to this workspace's outcome ids and `item:<id>` subject keys, which a rebuilt workspace assigns differently, and it carries no append-only triggers. Never load it into another workspace; restore from a database backup.
+
 ---
 
 ## 4. Working with Coding Agents
