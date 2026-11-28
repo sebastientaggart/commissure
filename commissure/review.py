@@ -452,14 +452,14 @@ def describe(
         value = value_at(json.loads(row["payload"]), row["pointer"])
         evidence = [
             e
-            for e in _subject_evidence(conn, keys, under=row["pointer"])
+            for e in _subject_evidence(conn, keys, root=root, under=row["pointer"])
             if e["stage"] == row["stage"]
         ]
     else:
         value = {"page": row["page"]}
         evidence = [
             e
-            for e in _subject_evidence(conn, keys)
+            for e in _subject_evidence(conn, keys, root=root)
             if e["origin"] == "parse" and e["page"] == row["page"] and e["stage"] == row["stage"]
         ]
     earlier = [

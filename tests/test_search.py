@@ -2,6 +2,7 @@
 
 import json
 import shutil
+import sqlite3
 import subprocess
 import sys
 import textwrap
@@ -212,6 +213,44 @@ def test_empty_query_is_not_match_all(parsed, ws_root, cli):
         ws.close()
     result = cli("search", "", "--workspace", str(ws_root), "--json")
     assert result.exit_code == 2
+
+
+def test_malformed_fts_queries_raise_usage_error(parsed, ws_root, cli):
+    ws = open_workspace(ws_root)
+    try:
+        for bad in ("AND AND", '"unclosed', "no_such_col:term"):
+            with pytest.raises(SearchUsageError):
+                search(ws.conn, bad, phrase=False)
+    finally:
+        ws.close()
+    result = cli("search", '"unclosed', "--raw", "--workspace", str(ws_root), "--json")
+    assert result.exit_code == 2
+
+
+def test_core_query_fault_is_not_reported_as_a_bad_query(parsed, ws_root):
+    """A broken view (a core bug) surfaces as itself, not as the caller's FTS syntax: only
+    errors from parsing the caller's query are `SearchUsageError`."""
+    ws = open_workspace(ws_root)
+    try:
+        # Fault injection: `current_text` loses its `stale` column, as a bad migration would.
+        body = (
+            ws.conn.execute(
+                "SELECT sql FROM sqlite_master WHERE type = 'view' AND name = 'current_text'"
+            )
+            .fetchone()[0]
+            .split(" AS", 1)[1]
+        )
+        ws.conn.execute("DROP VIEW current_text")
+        ws.conn.execute(
+            "CREATE VIEW current_text AS SELECT item_id, source_id, locator, item_version_id,"
+            f" extracted_text_id, parser, text, structure FROM ({body})"
+        )
+        for phrase in (True, False):
+            with pytest.raises(sqlite3.OperationalError, match="no such column") as err:
+                search(ws.conn, "merged across", phrase=phrase)
+            assert not isinstance(err.value, SearchUsageError)
+    finally:
+        ws.close()
 
 
 def test_search_from_a_worker_raises(parsed, ws_root):

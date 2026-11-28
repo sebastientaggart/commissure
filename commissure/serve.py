@@ -25,7 +25,7 @@ import time
 import urllib.parse
 from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from functools import partial
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -37,6 +37,7 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 from markupsafe import Markup, escape
 from pydantic import BaseModel, ValidationError
 
+from commissure import graph
 from commissure.deliver.html import (
     _INLINE_BRAND,
     STATIC_DIR,
@@ -47,6 +48,7 @@ from commissure.deliver.html import (
 from commissure.deliver.html import (
     DEFAULT_PAGE_FOOTER as DEFAULT_INTERFACE_FOOTER,
 )
+from commissure.graph import EdgeRow, EntityRow
 from commissure.ingest import check_folder_source, effective_ignore, ingest_folder
 from commissure.inspect import open_readonly
 from commissure.limits import Limits, is_limit_quarantine_stale, resolve_limits
@@ -68,6 +70,7 @@ from commissure.recipes import (
 )
 from commissure.review_page import ReviewPages
 from commissure.runner import RunCancelled, reap_abandoned, run_plan
+from commissure.search import Hit, search
 from commissure.workspace import (
     DB_NAME,
     LOCK_NAME,
@@ -78,6 +81,7 @@ from commissure.workspace import (
     check_root,
     lock,
     open_workspace,
+    resolve_source_uri,
 )
 
 _TEMPLATES_DIR = Path(__file__).resolve().parent / "deliver" / "templates"
@@ -185,8 +189,50 @@ class BusyStatus:
     tab_title_prefix: str = "[Running…]"
 
 
+class _CurrentQueries:
+    """Read-only queries over the current snapshot, for `InterfaceView` and `ActionContext`.
+
+    Each call opens its own read-only connection, so it sees steps an action just ran.
+    """
+
+    workspace_root: Path
+
+    def search(
+        self, query: str, *, parser: str | None = None, limit: int = 20, phrase: bool = True
+    ) -> list[Hit]:
+        """Keyword/phrase search over current parsed text (`commissure.search.search`)."""
+        return _read_current(
+            self.workspace_root,
+            lambda c: search(c, query, parser=parser, limit=limit, phrase=phrase),
+        )
+
+    def entities(self, *, kind: str | None = None, key: str | None = None) -> list[EntityRow]:
+        """Current entities (`commissure.graph.entities`)."""
+        return _read_current(self.workspace_root, lambda c: graph.entities(c, kind=kind, key=key))
+
+    def edges(
+        self,
+        *,
+        kind: str | None = None,
+        source_key: tuple[str, str] | str | None = None,
+        target_key: tuple[str, str] | str | None = None,
+        target_unresolved: str | None = None,
+    ) -> list[EdgeRow]:
+        """Current edges (`commissure.graph.edges`)."""
+        return _read_current(
+            self.workspace_root,
+            lambda c: graph.edges(
+                c,
+                kind=kind,
+                source_key=source_key,
+                target_key=target_key,
+                target_unresolved=target_unresolved,
+            ),
+        )
+
+
 @dataclass(frozen=True)
-class InterfaceView:
+class InterfaceView(_CurrentQueries):
     workspace_root: Path
     recipe_path: Path
     solution_dir: Path
@@ -198,6 +244,10 @@ class InterfaceView:
     steps: tuple[StepStatus, ...]
     busy: BusyStatus | None = None
     interrupted_step: str | None = None
+    # GET parameters of the page request (`/?q=...`), last value per name and without core's
+    # own `notice`, so a render can answer a read-only form such as a search. Empty on every
+    # other render (after an action, a poll swap): state a recipe needs must not live here.
+    query: Mapping[str, str] = field(default_factory=lambda: MappingProxyType({}))
     _recipe_name: str = field(repr=False, default="")
     _records_by_stage: Mapping[str, tuple[RecordInfo, ...]] = field(
         default_factory=dict, repr=False
@@ -908,6 +958,24 @@ def _open_current(db_path: Path) -> sqlite3.Connection:
     return conn
 
 
+def _read_current[T](
+    workspace_root: Path, query: Callable[[sqlite3.Connection], list[T]]
+) -> list[T]:
+    """Run `query` on a short-lived read-only connection; no workspace yet means no rows.
+
+    The view is built from a connection that is closed before render, so each query
+    opens its own; WAL lets it read while a run holds the workspace lock.
+    """
+    db_path = workspace_root / DB_NAME
+    if not db_path.is_file():
+        return []
+    conn = _open_current(db_path)
+    try:
+        return query(conn)
+    finally:
+        conn.close()
+
+
 def build_view(
     workspace_root: Path,
     recipe: Recipe,
@@ -1003,7 +1071,7 @@ def build_view(
             " COALESCE((SELECT max(ct.run_id) FROM current_items ci"
             "  JOIN current_text ct ON ct.item_version_id = ci.item_version_id"
             "  WHERE ci.source_id = s.id), 0) AS latest_text_run_id"
-            " FROM sources s ORDER BY s.id"
+            " FROM sources s WHERE s.retired_at IS NULL ORDER BY s.id"
         ).fetchall()
         current_items = conn.execute(
             "SELECT item_id, item_version_id, source_id, locator, role, run_id"
@@ -1062,7 +1130,7 @@ def build_view(
             SourceInfo(
                 id=r["id"],
                 kind=r["kind"],
-                uri=r["uri"],
+                uri=resolve_source_uri(r["uri"], ws_root, r["kind"]),
                 role=r["role"],
                 created_at=r["created_at"],
                 item_count=r["item_count"],
@@ -1145,7 +1213,7 @@ def build_view(
         conn.close()
 
 
-class ActionContext:
+class ActionContext(_CurrentQueries):
     """In-process execution context passed to `Interface.actions` handlers."""
 
     def __init__(
@@ -1982,7 +2050,12 @@ class InterfaceApp:
                 try:
                     recipe = self._load_current_recipe()
                     notice_id = query.get("notice", [None])[-1]
-                    view = self._current_view(recipe)
+                    view = replace(
+                        self._current_view(recipe),
+                        query=MappingProxyType(
+                            {k: v[-1] for k, v in query.items() if k != "notice"}
+                        ),
+                    )
                     notice = self._pop_notice(notice_id)
                     if notice is None and not view.locked:
                         notice = self._pop_completed_notice()

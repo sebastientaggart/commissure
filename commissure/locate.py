@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, NamedTuple
 
 
 @dataclass(frozen=True)
@@ -68,3 +68,31 @@ def locate_offset(
         else None,
         kind=kind,
     )
+
+
+class Legibility(NamedTuple):
+    """How much of an item's text a reader can trust, from its page blocks."""
+
+    pages: int | None  # None when the structure has no page blocks (not a paged format)
+    ocr_pages: int
+    unreadable_pages: int
+    mean_ocr_confidence: float | None  # over OCR pages that report a confidence
+
+
+def legibility(structure: Mapping[str, Any] | None) -> Legibility:
+    """Count the page blocks of ``structure``: all, recognised by OCR, and unreadable.
+
+    The structure format is core's, so recipes read legibility here rather than walking
+    ``structure["blocks"]`` themselves.
+    """
+    pages = [
+        b
+        for b in (structure or {}).get("blocks") or []
+        if isinstance(b, Mapping) and b.get("kind") == "page"
+    ]
+    if not pages:
+        return Legibility(None, 0, 0, None)
+    ocr = [b for b in pages if "ocr" in (b.get("flags") or [])]
+    unreadable = sum(1 for b in pages if b.get("status") == "unreadable")
+    confs = [b["confidence"] for b in ocr if isinstance(b.get("confidence"), (int, float))]
+    return Legibility(len(pages), len(ocr), unreadable, sum(confs) / len(confs) if confs else None)

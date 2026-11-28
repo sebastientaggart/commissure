@@ -1,0 +1,58 @@
+{
+  "text_hash": "9b904fa29d7e3fd62e02acd0082d353ada5e39be931cd4ad3f95610c64c7e3ec",
+  "outcome": "warning",
+  "reason_code": "content_root_body,encoding_fallback",
+  "diagnostics": [
+    {
+      "code": "content_root_body",
+      "detail": {
+        "detail": "no <main> or single <article>; chrome may be in the text"
+      }
+    },
+    {
+      "code": "encoding_fallback",
+      "detail": {
+        "detail": "bytes did not decode as declared; read as Windows-1252"
+      }
+    }
+  ],
+  "structure": {
+    "blocks": [
+      {
+        "kind": "heading",
+        "start": 0,
+        "end": 18,
+        "level": 1,
+        "status": "readable"
+      },
+      {
+        "kind": "paragraph",
+        "start": 20,
+        "end": 72,
+        "heading_path": [
+          "Annual Report 1999"
+        ],
+        "status": "readable"
+      },
+      {
+        "kind": "paragraph",
+        "start": 74,
+        "end": 109,
+        "heading_path": [
+          "Annual Report 1999"
+        ],
+        "status": "readable"
+      }
+    ],
+    "tables": [],
+    "metadata": {
+      "title": "Annual Report 1999",
+      "encoding": "cp1252",
+      "content_root": "body",
+      "dropped": {
+        "footer": 1,
+        "header": 1
+      }
+    }
+  }
+}

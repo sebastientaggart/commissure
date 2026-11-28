@@ -1,6 +1,6 @@
 [project]
 name = "commissure"
-version = "0.2.0"
+version = "0.3.0"
 description = "Local substrate for coding agents working on messy client data and document operations."
 readme = "README.md"
 license = "MIT"

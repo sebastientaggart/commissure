@@ -41,13 +41,14 @@ from pydantic import BaseModel, ValidationError
 
 from commissure.evidence import index as index_evidence
 from commissure.evidence import resolve as resolve_evidence
+from commissure.graph import index as index_graph
 from commissure.limits import Limits
 from commissure.llm import validate_stage_llm
 from commissure.parse import DEFAULT_FOR, PARSERS, extension
 from commissure.records import Diagnostic, Outcome, RecordEnvelope
 from commissure.review import Check, client_summary
 from commissure.runner import Plan, RunContext, Subject, canonical
-from commissure.workspace import Workspace, transaction, utc_now
+from commissure.workspace import Workspace, resolve_source_uri, transaction, utc_now
 
 SUBJECTS = ("item", "group", "run")
 
@@ -608,7 +609,7 @@ def _items(
                     "diagnostics": rec["diagnostics"],
                 }
                 consumed.append(rec["outcome_id"])
-        source_uri = r["source_uri"]
+        source_uri = resolve_source_uri(r["source_uri"], ws.root)
         item = Item(
             key=key,
             item_version_id=r["item_version_id"],
@@ -850,6 +851,13 @@ def recipe_plan(
         index_evidence(conn, record_id, evidence_rows)
         return {"record_id": record_id}
 
+    def index_outcome(
+        conn: sqlite3.Connection, run_id: int, outcome_id: int, s: Subject, env: RecordEnvelope
+    ) -> None:
+        # Graph rows key on the outcome, which does not exist yet inside `store`; a
+        # GraphError here rolls the subject back and fails the run, like EvidenceError.
+        index_graph(conn, run_id, outcome_id, s.input, env.entities, env.edges)
+
     return Plan(
         step=full,
         stage_fp=stage_fp,
@@ -857,6 +865,7 @@ def recipe_plan(
         subjects=subjects,
         execute=execute,
         store=store,
+        after_outcome=index_outcome,
         recipe_fp=recipe.fingerprint,
         allow_empty=allow_empty or stage.allow_empty,
         allow_nothing_attempted=stage.allow_nothing_attempted,

@@ -15,6 +15,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from commissure.graph import EdgeSpec, EntitySpec
+
 OUTCOMES = ("valid", "warning", "quarantined", "skipped")
 Outcome = Literal["valid", "warning", "quarantined", "skipped"]
 
@@ -37,6 +39,9 @@ class RecordEnvelope[T](BaseModel):
     payload: T | None = None
     reason_code: str | None = Field(default=None, min_length=1)
     diagnostics: list[Diagnostic] = Field(default_factory=list)
+    # Indexed against the outcome when it is stored (commissure/graph.py).
+    entities: tuple[EntitySpec, ...] = ()
+    edges: tuple[EdgeSpec, ...] = ()
 
     @model_validator(mode="after")
     def _shape(self) -> RecordEnvelope[T]:
@@ -49,19 +54,36 @@ class RecordEnvelope[T](BaseModel):
             raise ValueError("valid has no reason code; every other outcome has one")
         if self.outcome == "warning" and not self.diagnostics:
             raise ValueError("a warning needs at least one diagnostic")
+        if self.outcome in ("quarantined", "skipped") and (self.entities or self.edges):
+            raise ValueError(f"a {self.outcome} envelope carries no entities or edges")
         return self
 
     @classmethod
-    def valid(cls, payload: T) -> RecordEnvelope[T]:
-        return cls(outcome="valid", payload=payload)
+    def valid(
+        cls,
+        payload: T,
+        *,
+        entities: tuple[EntitySpec, ...] | list[EntitySpec] = (),
+        edges: tuple[EdgeSpec, ...] | list[EdgeSpec] = (),
+    ) -> RecordEnvelope[T]:
+        return cls(outcome="valid", payload=payload, entities=entities, edges=edges)
 
     @classmethod
-    def warning(cls, payload: T, reason: str, *diagnostics: Diagnostic) -> RecordEnvelope[T]:
+    def warning(
+        cls,
+        payload: T,
+        reason: str,
+        *diagnostics: Diagnostic,
+        entities: tuple[EntitySpec, ...] | list[EntitySpec] = (),
+        edges: tuple[EdgeSpec, ...] | list[EdgeSpec] = (),
+    ) -> RecordEnvelope[T]:
         return cls(
             outcome="warning",
             payload=payload,
             reason_code=reason,
             diagnostics=list(diagnostics) or [Diagnostic(code=reason)],
+            entities=entities,
+            edges=edges,
         )
 
     @classmethod

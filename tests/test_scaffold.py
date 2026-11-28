@@ -21,6 +21,7 @@ EXPECTED = {
     "release.toml",
     "docs/README.md",
     "docs/notes.md",
+    "docs/user-guide.md",
     "intake/README.md",
     "recipe/__init__.py",
     "recipe/AGENTS.md",

@@ -22,6 +22,7 @@ from functools import cached_property
 from pathlib import Path
 
 from commissure.limits import DEFAULT_LIMITS, Limits
+from commissure.parse.html import parse_html
 from commissure.parse.model import ParsedDoc
 from commissure.parse.ocr import ParserUnavailable as ParserUnavailable
 from commissure.parse.ocr import parse_ocr, tesseract_version
@@ -115,6 +116,13 @@ PARSERS = {
         Parser("xlsx", frozenset({".xlsx", ".xlsm"}), parse_xlsx, _TABULAR, ("openpyxl",)),
         Parser("csv", frozenset({".csv"}), parse_csv, _TABULAR, stdlib=True),
         Parser("json", frozenset({".json"}), parse_json, _TABULAR, stdlib=True),
+        Parser(
+            "html",
+            frozenset({".html", ".htm"}),
+            parse_html,
+            (MODEL, "commissure.parse.html"),
+            stdlib=True,
+        ),
     )
 }
 
@@ -125,6 +133,8 @@ DEFAULT_FOR = {
     ".xlsm": "xlsx",
     ".csv": "csv",
     ".json": "json",
+    ".html": "html",
+    ".htm": "html",
 }
 
 

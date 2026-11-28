@@ -21,7 +21,7 @@ allowed = [
 # file there must be a [[vendored]] entry below, so a new file cannot arrive without a license
 # decision. logo.svg's wordmark is Inter Medium outlined to paths (OFL-1.1 permits this; no font
 # file is embedded). Top-level keys must precede the tables below (TOML).
-first_party = ["favicon.svg", "logo.svg", "report.css", "report.js"]
+first_party = ["charts.js", "favicon.svg", "logo.svg", "report.css", "report.js"]
 
 # --- Overrides -------------------------------------------------------------------------------
 # For packages whose metadata names no SPDX license. `declared` is the string the metadata

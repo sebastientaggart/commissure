@@ -15,6 +15,12 @@ does not handle fails the run: expected bad data is a quarantine, not a crash.
 A payload points at what it rests on with `Evidence.span`, `.on_page`, or
 `.whole_item`, built from an `Item` the stage received; core checks it and fills in
 locator, page, and OCR trust when the record is stored (`commissure/evidence.py`).
+
+Beside a payload, `RecordEnvelope.valid(payload, entities=..., edges=...)` emits graph
+rows (`EntitySpec`, `EdgeSpec`) that core indexes against the outcome; `ctx.entities`,
+`ctx.edges`, and `ctx.search` (and the same on `InterfaceView` and `ActionContext`)
+read the current snapshot (`commissure/graph.py`). `InterfaceView.query` holds the GET
+parameters of the page request, so a render can answer a read-only form (a search box).
 """
 
 from commissure.chunk import (
@@ -35,6 +41,14 @@ from commissure.deliver.html import (
     render_page,
 )
 from commissure.evidence import Evidence, EvidenceError
+from commissure.graph import (
+    EdgeRow,
+    EdgeSpec,
+    EntityRow,
+    EntitySpec,
+    GraphError,
+    GraphFromWorker,
+)
 from commissure.limits import Limits
 from commissure.llm import (
     Completion,
@@ -82,11 +96,17 @@ __all__ = [
     "Check",
     "Completion",
     "Diagnostic",
+    "EdgeRow",
+    "EdgeSpec",
+    "EntityRow",
+    "EntitySpec",
     "Evidence",
     "EvidenceError",
     "Excluded",
     "Extraction",
     "ExtractionFailed",
+    "GraphError",
+    "GraphFromWorker",
     "Group",
     "Hit",
     "InputTooLarge",

@@ -51,7 +51,7 @@ from commissure.llm import (
 from commissure.progress import ProgressSnapshot
 from commissure.records import RecordEnvelope
 from commissure.runs import EmptyDiscovery, finish_run, start_run
-from commissure.workspace import Workspace, transaction, utc_now
+from commissure.workspace import _CONN_LOCK, Workspace, transaction, utc_now
 
 ProgressCallback = Callable[[ProgressSnapshot], None]
 
@@ -183,6 +183,46 @@ class RunContext:
             raise RuntimeError("RunContext has no workspace connection")
         return search(self._conn, query, parser=parser, limit=limit, phrase=phrase)
 
+    def _graph_conn(self, name: str) -> sqlite3.Connection:
+        from commissure.graph import GraphFromWorker
+
+        if getattr(_local, "in_worker", False):
+            raise GraphFromWorker(
+                f"ctx.{name} cannot run from a worker; call it from the main thread"
+            )
+        if self._conn is None:
+            raise RuntimeError("RunContext has no workspace connection")
+        return self._conn
+
+    def entities(self, *, kind: str | None = None, key: str | None = None):
+        """Current entities (`commissure.graph.entities`). Main thread only."""
+        from commissure.graph import entities
+
+        conn = self._graph_conn("entities")
+        with _CONN_LOCK:
+            return entities(conn, kind=kind, key=key)
+
+    def edges(
+        self,
+        *,
+        kind: str | None = None,
+        source_key: tuple[str, str] | str | None = None,
+        target_key: tuple[str, str] | str | None = None,
+        target_unresolved: str | None = None,
+    ):
+        """Current edges (`commissure.graph.edges`). Main thread only."""
+        from commissure.graph import edges
+
+        conn = self._graph_conn("edges")
+        with _CONN_LOCK:
+            return edges(
+                conn,
+                kind=kind,
+                source_key=source_key,
+                target_key=target_key,
+                target_unresolved=target_unresolved,
+            )
+
     def map(self, fn: Callable[[Any], Any], items: Iterable[Any]) -> list[Any]:
         """`fn` over `items` on at most `workers` threads; results in input order.
 
@@ -248,6 +288,11 @@ class Plan:
     gate: Callable[[dict[str, int]], list[str]] | None = None
     limits: Limits | None = None
     close: Callable[[], None] | None = None
+    # Runs after the outcome row is inserted, in the same transaction, with its id: for
+    # rows keyed by outcome (the graph). Raising rolls the subject back and fails the run.
+    after_outcome: (
+        Callable[[sqlite3.Connection, int, int, Subject, RecordEnvelope], None] | None
+    ) = None
 
 
 @dataclass
@@ -732,6 +777,8 @@ def _write(conn, plan: Plan, result: RunResult, s: Subject, env: RecordEnvelope)
             "INSERT OR IGNORE INTO outcome_inputs (outcome_id, upstream_outcome_id) VALUES (?, ?)",
             [(outcome_id, u) for u in s.consumed],
         )
+        if plan.after_outcome is not None and env.payload is not None:
+            plan.after_outcome(conn, result.run_id, outcome_id, s, env)
     setattr(result, env.outcome, getattr(result, env.outcome) + 1)
     if env.outcome != "skipped":
         result.attempted += 1

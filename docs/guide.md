@@ -75,13 +75,7 @@ def extract(ctx: RunContext, item: Item) -> Report | RecordEnvelope[Report]:
     return Report(
         workstream=workstream.strip(),
         summary=summary.strip(),
-        evidence=Evidence.from_item(
-            item,
-            kind="summary_span",
-            text=item.text[span_start:span_end],
-            start=span_start,
-            end=span_end,
-        ),
+        evidence=Evidence.span(item, span_start, span_end, kind="summary_span"),
     )
 ```
 
@@ -116,6 +110,54 @@ STAGES = [
 ]
 ```
 
+### HTML Deliverables & Charts (`render_page`)
+
+Deliverable stages render body fragments through `render_page` ([`commissure/deliver/html.py`](../commissure/deliver/html.py)), which wraps them in the shared offline shell (`pico.min.css`, [`report.css`](../commissure/deliver/static/report.css), [`report.js`](../commissure/deliver/static/report.js), and optional `recipe/brand/brand.css`).
+
+`report.css` provides `:root` chart tokens (overridable in `recipe/brand/brand.css`) and zero-JS HTML chart primitives so recipes never hard-code hex values or repurpose `--status-*` tokens as data series:
+
+- **Tokens:** `--chart-cat-1` to `--chart-cat-8` (OKLCH- and color-blind-validated categorical palette; leading 7 slots pass all-pairs separation) plus `--chart-cat-rest`, `--chart-series` (`var(--brand-primary)`), `--chart-seq-1` to `--chart-seq-5`, `--chart-div-neg` / `--chart-div-mid` / `--chart-div-pos`, `--chart-wash`, `--chart-band`, `--chart-grid`, `--chart-axis-ink`, `--chart-label-on-dark`, and `--chart-label-on-light`.
+- **HTML primitives (no JavaScript required):**
+  - 100% segmented bar and legend:
+    ```html
+    <div class="chart-segbar" role="img" aria-label="Category split">
+      <span class="chart-seg chart-on-dark" style="flex-grow: 48; background: var(--chart-cat-1);">48%</span>
+      <span class="chart-seg chart-on-light" style="flex-grow: 22; background: var(--chart-cat-2);">22%</span>
+      <span class="chart-seg chart-on-dark" style="flex-grow: 18; background: var(--chart-cat-3);">18%</span>
+      <span class="chart-seg chart-on-light" style="flex-grow: 12; background: var(--chart-cat-4);">12%</span>
+    </div>
+    <ul class="chart-legend">
+      <li><span class="chart-swatch" style="background: var(--chart-cat-1);"></span>Category A</li>
+      <li><span class="chart-swatch" style="background: var(--chart-cat-2);"></span>Category B</li>
+      <li><span class="chart-swatch" style="background: var(--chart-cat-3);"></span>Category C</li>
+      <li><span class="chart-swatch" style="background: var(--chart-cat-4);"></span>Category D</li>
+    </ul>
+    ```
+  - Ranked horizontal bar list: `.chart-bars > li` containing `.chart-bar-label`, `.chart-bar-track > .chart-bar`, and `.chart-bar-value`.
+- **Chart.js defaults (`scripts=("chart.umd.min.js",)`):** Passing `"chart.umd.min.js"` to `render_page` automatically includes [`charts.js`](../commissure/deliver/static/charts.js) right after it. `charts.js` reads `:root` tokens, sets `Chart.defaults` (page font, axis/grid ink, animation off, `index` hover tooltips without color boxes on single-series charts, 24px bar thickness cap with 4px top radius, 2px round-joined lines), colors datasets from `--chart-series` or `--chart-cat-*` (keyed by `dataset.key` via `CommissureCharts.colorFor(key, keys)`), and registers `CommissureCharts.capLabels` and `CommissureCharts.referenceLines`:
+  ```html
+  <div class="chart-canvas"><canvas id="daily-counts"></canvas></div>
+  <div class="chart-canvas"><canvas id="cumulative-share"></canvas></div>
+  <script>
+    new Chart(document.getElementById("daily-counts"), {
+      type: "bar",
+      data: { labels: days, datasets: [{ label: "Count", data: counts }] },
+      options: { maintainAspectRatio: false, plugins: { legend: { display: false }, capLabels: true } }
+    });
+    new Chart(document.getElementById("cumulative-share"), {
+      type: "line",
+      data: { labels: days, datasets: [{ label: "Share", data: shares, fill: "origin" }] },
+      options: {
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          referenceLines: { bands: [{ start: "2026-05-01", end: "2026-05-15", label: "Closes May 15" }] }
+        }
+      }
+    });
+  </script>
+  ```
+
 ---
 
 ## 3. CLI Workflow & Reference
@@ -123,10 +165,10 @@ STAGES = [
 Every command supports `--json` for structured agent consumption. `commissure run` writes live progress to `stderr` when it is a terminal (`--progress` / `--no-progress` override), so cron runs stay quiet. When invoked inside `solutions/<name>/`, `--recipe` and `--workspace` default to `./recipe` and `./workspace`.
 
 Deterministic exit codes apply across all commands:
-- `0` — Succeeded (or clean `noop` when all items are unchanged)
-- `1` — Run or gate failed
-- `2` — Usage, configuration, or recipe validation error
-- `3` — Workspace is locked by another writer
+- `0`: Succeeded (or clean `noop` when all items are unchanged)
+- `1`: Run or gate failed
+- `2`: Usage, configuration, or recipe validation error
+- `3`: Workspace is locked by another writer
 
 ### Step-by-Step Pipeline Execution
 
@@ -139,7 +181,19 @@ cd solutions/<name>
 uv run commissure probe intake/<batch> --json
 
 # 2. Ingest a folder as a source and classify byte drift
+#    (Sources under the solution folder are stored relatively as `intake/<batch>`;
+#     outside sources are stored as absolute paths.)
 uv run commissure run --step ingest --source intake/<batch> --role corpus --json
+
+#    If an outside source folder (or a workspace created with absolute source paths) moves,
+#    rewrite stored folder paths in place while keeping source IDs, items, and verdicts:
+uv run commissure sources relocate /old/path /new/path --dry-run --json
+uv run commissure sources relocate /old/path /new/path --json
+#    If an ingest already ran at the new path and created a duplicate source, retire the
+#    unreviewed duplicate (tombstoning its current items and setting sources.retired_at),
+#    then relocate the original source:
+uv run commissure sources retire <duplicate-source-id> --dry-run --json
+uv run commissure sources retire <duplicate-source-id> --json
 
 # 3. Parse current items into structured blocks, tables, and FTS5-indexed text
 uv run commissure run --step parse --json
@@ -190,6 +244,24 @@ uv run commissure search "budget AND (personnel OR fringe)" --raw --parser ocr -
 
 Hits return locator, parser, page, and character offsets. Stages can also call `ctx.search(...)` on the main thread.
 
+### Entities and Edges (graph)
+A stage emits graph rows beside its payload; core indexes them against the outcome, so only the current snapshot shows and a rerun supersedes it:
+
+```python
+return RecordEnvelope.valid(
+    payload,
+    entities=[EntitySpec(kind="topic", key="budget")],
+    edges=[
+        EdgeSpec(kind="about", source_item_key=item.key, target_entity_key=("topic", "budget")),
+        EdgeSpec(kind="cites", source_item_key=item.key, target_unresolved="ref 12(b)"),
+    ],
+)
+```
+
+An entity endpoint must name an entity in the same envelope; provenance (`item_version_ids`) must name item versions the subject owns: item stages default to their own, and a group or run stage must name at least one member on every entity and edge. Any of these mistakes fails the run. Read the current graph with `ctx.entities(...)` / `ctx.edges(...)` (main thread), or `view.entities(...)`, `view.edges(...)`, and `view.search(...)` in an `INTERFACE` render or action. `commissure inspect` summarizes current entities and edges per stage and kind.
+
+When the graph is about which authorities are still in effect (instruments that supersede, stay, vacate, or amend each other), use `commissure.patterns.currency` rather than writing the rules again: `resolve_currency` (the latest dated action decides, an undated one never overrides a dated one, a same-day tie goes to the most final verb and is flagged `same_day_actions`, a freshness stamp never outranks an action), `supersession_date`, `merge_claims` (one edge per source, kind, and target, never without evidence), `lineage` and `deciding_actors` (a citation already dead at issuance, dead only after, or undetermined when a date is unknown; never for a document that is itself a deciding actor; with the freshness-stamp trap only where it can mislead), and `graph_rows` (the same graph as `EntitySpec` / `EdgeSpec` rows with provenance). The recipe keeps its own identities, payload schemas, and domain exemptions. `commissure.patterns.legibility(item.structure)` gives an item's page, OCR-page, and unreadable-page counts and mean OCR confidence without reading the structure format directly.
+
 ### Reviewing Results (`commissure review` & `commissure serve`)
 Measures empirical accuracy on stage checks and parse page checks (`parse:unreadable_pages`, `parse:ocr_pages`):
 
@@ -205,7 +277,7 @@ uv run commissure review next
 uv run commissure review record 12 correct --reviewer alice --note "Matches table row 3"
 
 # Record an ad-hoc spot check (logged, never counted in sample error rates)
-uv run commissure review spot --subject item:26 --check extract:/evidence wrong --reviewer alice
+uv run commissure review spot --subject item:26 --check extract:/evidence --pointer /evidence
 
 # View sample error rates and Wilson 95% confidence intervals
 uv run commissure review report --json
@@ -223,22 +295,15 @@ Opening `/review` in the browser provides the full sampling and grading workflow
 
 ## 4. Working with Coding Agents
 
-Commissure ships agent instructions and workflows as versioned files in the repository:
-- [`AGENTS.md`](../AGENTS.md) holds the global invariants.
-- [`.agents/skills/`](../.agents/skills/) holds four task-specific workflows (with relative symlinks in `.claude/skills/` for Claude Code):
-
-1. **`new-solution`** (agent): Runs `commissure init solutions/<name>`, hands off a checklist of what to populate in `intake/` and `docs/`, and stops.
-2. **Operator populates:** Places a representative batch of inputs in `intake/<batch>/` and reference notes in `docs/` (indexed in `docs/README.md`).
-3. **`investigate-solution`** (agent): Reads `docs/README.md` and all notes, runs `probe`, ingests and parses into a `/tmp` scratch workspace (including `--parser ocr` when needed), runs `recon`, completes `recipe/AGENTS.md`, and stops for review before writing stage code.
-4. **`build-recipe-stage`** (agent): Implements one stage, deliverable, or `INTERFACE` at a time—strict schema first, deterministic extraction second, `ctx.llm` for residue only—iterating with `--limit N --json` and writing proven-to-fail tests in `solutions/<name>/tests/`.
+See [`docs/solutions.md`](solutions.md) for the step-by-step solution lifecycle (`new-solution`, `investigate-solution`, `build-recipe-stage`, `release-target`), operator vs. agent responsibilities, `recipe/tools/` fetchers, `intake/` curation, and roles.
 
 ---
 
 ## 5. Delivering to Clients (`commissure release`)
 
-Clients who run a solution as an appliance receive a generated single-solution release repository or tarball—never the development repository, `intake/`, `workspace/`, or internal `docs/`:
+Clients who run a solution as an appliance receive a generated single-solution release repository or tarball, never the development repository, `intake/`, `workspace/`, or internal `docs/`:
 
-- `solutions/<name>/release.toml` declares the solution's `version`, allowlisted paths (default `recipe/` and `CHANGELOG.md`), optional extras (`extras = ["docx"]`), and client usage instructions.
+- `solutions/<name>/release.toml` declares the solution's `version`, allowlisted paths (default `recipe/`, `CHANGELOG.md`, and `docs/user-guide.md` when present, linked from the generated `README.md`), optional extras (`extras = ["docx"]`), and a short quick-start `usage`.
 - `solutions/<name>/releases/<target>.toml` configures a specific client destination (`title`, optional git `remote`, `tarball = true`, and target-specific `forbid` regexes).
 
 ```sh

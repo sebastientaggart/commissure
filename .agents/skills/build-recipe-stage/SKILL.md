@@ -76,14 +76,14 @@ until a split is clearly needed.
      staleness).
    - A stage’s `needs` may never include a run stage. If a later stage needs an aggregate,
      use a one-group group stage (`group_by` → `lambda _: "whole_corpus"`).
-4. **Iterate on a slice** from `solutions/<name>/`. If the workspace already has data,
+4. **Iterate on a slice** in `solutions/<name>/` (`uv run --directory solutions/<name>` when running from the repo root). If the workspace already has data,
    start with `inspect`, not a fresh ingest. Commands: `commissure/cli.py`. Typical loop:
    ```bash
-   uv run commissure run --step <stage> --limit 5 --json
-   uv run commissure inspect --run latest --stage <stage> --json
-   uv run commissure inspect --only-errors --limit 10 --json
-   uv run commissure inspect --subject <key_or_locator> --json
-   uv run commissure inspect --call <call_id> --json   # LLM: raw request + response
+   uv run --directory solutions/<name> commissure run --step <stage> --limit 5 --json
+   uv run --directory solutions/<name> commissure inspect --run latest --stage <stage> --json
+   uv run --directory solutions/<name> commissure inspect --only-errors --limit 10 --json
+   uv run --directory solutions/<name> commissure inspect --subject <key_or_locator> --json
+   uv run --directory solutions/<name> commissure inspect --call <call_id> --json   # LLM: raw request + response
    ```
    `--limit N` takes the first N pending subjects—also hit quarantine cases from
    `recipe/AGENTS.md` via `--subject` or a targeted fixture. Verify counts against
@@ -116,7 +116,13 @@ record describing the files. It is not an interface.
 - Read the header comment and `:root` tokens at the top of
   `commissure/deliver/static/report.css` first. Do not override core desktop typography or
   sticky header controls. Page-local `<style>` may add layout classes when no primitive
-  fits; tokens only—no hard-coded color palettes—and say so in the report.
+  fits; tokens only—no hard-coded color palettes, and never reuse `--status-*` tokens as
+  chart series colors—and say so in the report.
+- For charts, use `--chart-*` tokens, the HTML primitives (`.chart-segbar > .chart-seg`,
+  `.chart-on-dark`, `.chart-on-light`, `.chart-legend > li > .chart-swatch`, `.chart-bars`,
+  `.chart-canvas`), and `render_page(..., scripts=("chart.umd.min.js",))`, which auto-loads
+  `static/charts.js` (`Chart.defaults` and `window.CommissureCharts`: `color`, `colorFor`,
+  `capLabels`, `referenceLines`).
 - Form labels and `.field-hint` above `.form-row`; table filters in `.section-toolbar`
   (details in the `report.css` header). Concise `thead th` labels.
 - Branding only in `recipe/brand/{brand.css,header.html,footer.html,logo.svg}`. List brand
@@ -129,6 +135,9 @@ renders records and produces no outputs. Do not run `commissure run` for it.
 
 - Core owns the chrome; `render` returns a body fragment. Actions use `ActionContext` /
   `ActionError`; mask secrets; include the CSRF field on forms. Empty state looks empty.
+- A read-only form (a search box) is a GET form to `/`; `render` reads its fields from
+  `view.query` and answers with `view.search()`, `view.entities()`, `view.edges()`. Writes
+  stay POST actions. `view.query` is empty on any render after an action.
 - Put the mount in `recipe/interface.py` and `templates/interface.html.j2`, and test
   against the real HTTP server (CSRF, actions, layout). If core is missing a public helper,
   stop and propose it—do not call private `ctx._*` APIs.

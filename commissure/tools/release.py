@@ -6,9 +6,9 @@
 
 A target (`solutions/<solution>/releases/<target>.toml`) names a client destination for its
 enclosing solution. The solution says what it ships in `solutions/<solution>/release.toml`:
-its version and an allowlist of paths (by default `recipe/` and `CHANGELOG.md`). Tests,
-fixtures, intake, workspaces, releases, and internal docs never ship because they are never
-listed.
+its version and an allowlist of paths (by default `recipe/`, `CHANGELOG.md`, and
+`docs/user-guide.md` when present). Tests, fixtures, intake, workspaces, releases, and internal
+docs never ship because they are never listed.
 
 The release repo is generated, not developed in: every build replaces its tree with the
 allowlisted files, a pinned commissure wheel in `vendor/`, and a generated `pyproject.toml`,
@@ -40,6 +40,7 @@ from pathlib import Path, PurePosixPath
 
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_INCLUDE = ("recipe", "CHANGELOG.md")
+USER_GUIDE = "docs/user-guide.md"
 ALWAYS_SKIP = ("__pycache__", "*.pyc", ".DS_Store", ".pytest_cache", ".ruff_cache")
 GENERATED = ("README.md", "pyproject.toml", "uv.lock", "release.json", ".gitignore", "vendor")
 DEFAULT_FORBID = (
@@ -267,6 +268,19 @@ def load_solution(root: Path, name: str) -> Solution:
             rel = f.relative_to(sdir).as_posix()
             if not _skipped(rel, sol.exclude):
                 sol.files[f"solutions/{name}/{rel}"] = f
+    guide = sdir / USER_GUIDE
+    if guide.is_file() and not _skipped(USER_GUIDE, sol.exclude):
+        guide_text = guide.read_text(encoding="utf-8")
+        if "TODO" in guide_text:
+            raise ReleaseError(f"{guide}: still says TODO; write or exclude it before releasing")
+        # Keep release.toml `usage` as a short quick-start; refuse when it names a step,
+        # role, or source folder that contradicts the shipped user guide.
+        for flag, val in re.findall(r"--(step|role|source)\s+(\S+)", sol.usage):
+            if not val.startswith("$") and val not in guide_text:
+                raise ReleaseError(
+                    f"{path}: `usage` names --{flag} {val!r}, which is not in {USER_GUIDE}"
+                )
+        sol.files[f"solutions/{name}/{USER_GUIDE}"] = guide
     changelog = sdir / "CHANGELOG.md"
     if not changelog.is_file() or f"## {sol.version}" not in changelog.read_text(encoding="utf-8"):
         raise ReleaseError(f"{name} {sol.version} has no `## {sol.version}` entry in CHANGELOG.md")
@@ -298,6 +312,8 @@ def core_version(wheel: Path) -> str:
 
 
 def _readme(target: Target, sol: Solution, core: str) -> str:
+    guide = f"solutions/{sol.name}/{USER_GUIDE}"
+    guide_line = f"\nSee [`{guide}`]({guide}) for the user guide.\n" if guide in sol.files else ""
     return f"""# {target.title}
 
 Release v{sol.version}, built {date.today().isoformat()} on commissure {core}.
@@ -324,7 +340,7 @@ Each solution keeps its inputs in `solutions/<name>/intake/` and its data in
 ## {sol.name}
 
 {sol.usage}
-
+{guide_line}
 ## Changes
 
 `solutions/{sol.name}/CHANGELOG.md` lists what changed in each version.

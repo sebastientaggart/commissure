@@ -26,6 +26,7 @@ VIEWS = {
     "current_items", "latest_runs", "drift",
     "current_text", "current_outcomes", "current_records", "outcome_issues",
     "llm_calls_by_run", "llm_calls_by_model", "evidence_review",
+    "current_entities", "current_edges",
 }  # fmt: skip
 
 

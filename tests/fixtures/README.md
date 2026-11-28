@@ -2,7 +2,7 @@
 
 Input corpora and generator scripts exercising `commissure probe` (including the per-page PDF readability gate), `commissure run --step ingest`, and `commissure run --step parse`.
 
-> **Folder-walk invariant:** `probe` and `ingest` walk every regular file inside a source directory (`commissure.ingest.iter_folder_files`). Keep documentation (`README.md`), generators (`make_probe_corpus.py`, `make_real_samples.py`, `make_ocr_corpus.py`, `make_recon_corpus.py`), and expectation manifests (`real_samples.expected.json`) at this root level—never inside a corpus subfolder.
+> **Folder-walk invariant:** `probe` and `ingest` walk every regular file inside a source directory (`commissure.ingest.iter_folder_files`). Keep documentation (`README.md`), generators (`make_probe_corpus.py`, `make_real_samples.py`, `make_ocr_corpus.py`, `make_recon_corpus.py`, `make_html_corpus.py`), and expectation manifests (`real_samples.expected.json`) at this root level—never inside a corpus subfolder.
 
 ---
 
@@ -18,6 +18,7 @@ Input corpora and generator scripts exercising `commissure probe` (including the
 | **XLSX with multiple sheets & nulls** | `inventory.xlsx` (2 sheets, title row, nulls) | `workbook.xlsx` (2 sheets, nulls, uncached formulas) |
 | **CSV with UTF-8 BOM & quoting defect** | — | `table.csv`, `quoted_bom.csv` (`ragged_rows`) |
 | **JSON array** | `events.json` (10-item `list`) | — |
+| **HTML page (chrome around `<main>`; legacy page without one)** | — | `html_corpus/Program Instruction PI-00-01 _ Example Agency.html`, `html_corpus/legacy.htm` (`make_html_corpus.py`) |
 
 ---
 
@@ -74,3 +75,11 @@ Small 4-file nested directory (`alpha.txt`, `beta.txt`, `nested/delta.csv`, `nes
 1. **Sample corpus (`real_samples/`):** Edit `tests/fixtures/make_real_samples.py`, run `uv run python tests/fixtures/make_real_samples.py`, verify with `uv run commissure probe tests/fixtures/real_samples --json`, and update `tests/fixtures/real_samples.expected.json`.
 2. **Synthetic fixtures (`probe_corpus/`):** Edit `tests/fixtures/make_probe_corpus.py` and run `uv run python tests/fixtures/make_probe_corpus.py`.
 3. **Parse goldens (`tests/golden/parse/`):** Run `COMMISSURE_UPDATE_GOLDEN=1 uv run pytest tests/test_parse_golden.py`, then inspect `git diff tests/golden` and new golden files line by line before committing.
+
+## `html_corpus/`: saved web pages (`make_html_corpus.py`)
+
+Written by `uv run python tests/fixtures/make_html_corpus.py`; never hand-edit. The issuance page,
+named the way a browser saves a page (title, spaces, ` _ `), is a federal-style page with banner, header, navigation, search form, footer, and scripts
+around `<main>` (headings, a field list, inline markup and `<br>`, a nested list, a `colspan` table,
+a hidden element). `legacy.htm` has no `<main>` and is Windows-1252 without a declaration
+(`content_root_body`, `encoding_fallback`). Parse goldens in `tests/golden/parse/html_corpus/`.

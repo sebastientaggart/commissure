@@ -28,14 +28,22 @@ import sqlite3
 import stat
 import threading
 from collections.abc import Iterator, Sequence
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
 from commissure.limits import DEFAULT_LIMITS, LimitExceeded, Limits
 from commissure.runner import AllQuarantined, RunCancelled, canonical
 from commissure.runs import EmptyDiscovery, finish_run, start_run
-from commissure.workspace import SourceReadError, Workspace, hash_file, transaction, utc_now
+from commissure.workspace import (
+    SourceReadError,
+    Workspace,
+    format_folder_uri,
+    hash_file,
+    resolve_source_uri,
+    transaction,
+    utc_now,
+)
 
 FOLDER = "folder"
 DEFAULT_IGNORE: tuple[str, ...] = (
@@ -67,9 +75,12 @@ class IngestResult:
     removed: int = 0
     quarantined: int = 0
     error: str | None = None
+    warnings: list[str] = field(default_factory=list)
 
     def as_dict(self) -> dict[str, Any]:
-        return asdict(self)
+        out = asdict(self)
+        out.pop("warnings", None)
+        return out
 
 
 def effective_ignore(
@@ -172,13 +183,15 @@ def check_folder_source(folder: Path, ws_root: Path) -> Path:
 
 
 def register_source(conn: sqlite3.Connection, kind: str, uri: str, role: str) -> int:
-    """Return the id of source (kind, uri), creating it if new.
+    """Return the id of active source (kind, uri), creating it if new.
 
     A source keeps the role it was registered with; asking for a different one is an
-    error rather than a silent re-labelling of existing items.
+    error rather than a silent re-labelling of existing items. Retired sources are
+    ignored so a re-ingest registers a fresh active source row.
     """
     row = conn.execute(
-        "SELECT id, role FROM sources WHERE kind = ? AND uri = ?", (kind, uri)
+        "SELECT id, role FROM sources WHERE kind = ? AND uri = ? AND retired_at IS NULL",
+        (kind, uri),
     ).fetchone()
     if row is not None:
         if row["role"] != role:
@@ -190,6 +203,279 @@ def register_source(conn: sqlite3.Connection, kind: str, uri: str, role: str) ->
             (kind, uri, role, utc_now()),
         )
     return cur.lastrowid
+
+
+def _adopt_absolute_source(conn: sqlite3.Connection, folder: Path, stored_uri: str) -> None:
+    """Rewrite an active absolute row for this same folder to its stored form, keeping its id.
+
+    Workspaces written before folder sources were stored relative hold the resolved absolute
+    path. Without this, the first ingest after upgrading misses that row and registers a second
+    source for the same, unmoved folder, duplicating every item. The path still resolves to
+    this folder, so rewriting it is safe; a moved folder's stale row is `relocate`'s job.
+    """
+    absolute = str(folder)
+    if stored_uri == absolute:
+        return
+    rows = {
+        r["uri"]: r["id"]
+        for r in conn.execute(
+            "SELECT id, uri FROM sources WHERE kind = ? AND uri IN (?, ?) AND retired_at IS NULL",
+            (FOLDER, absolute, stored_uri),
+        )
+    }
+    if absolute in rows and stored_uri not in rows:
+        with transaction(conn):
+            conn.execute("UPDATE sources SET uri = ? WHERE id = ?", (stored_uri, rows[absolute]))
+
+
+def _stale_folder_warnings(
+    conn: sqlite3.Connection,
+    ws_root: Path,
+    folder: Path,
+    stored_uri: str,
+    role: str,
+) -> list[str]:
+    """Warn when registering a new folder source while a same-role, same-name source is missing."""
+    existing = conn.execute(
+        "SELECT 1 FROM sources WHERE kind = ? AND uri = ? AND retired_at IS NULL",
+        (FOLDER, stored_uri),
+    ).fetchone()
+    if existing is not None:
+        return []
+    warnings: list[str] = []
+    for row in conn.execute(
+        "SELECT id, uri FROM sources WHERE kind = ? AND role = ? AND retired_at IS NULL"
+        " ORDER BY id",
+        (FOLDER, role),
+    ):
+        resolved_path = Path(resolve_source_uri(row["uri"], ws_root, FOLDER))
+        if resolved_path.name == folder.name and not resolved_path.exists():
+            warnings.append(
+                f"existing source #{row['id']} ({row['uri']}) with role {role!r} and folder"
+                f" name {folder.name!r} no longer exists; if the folder moved, repair the"
+                " workspace with `commissure sources relocate <old> <new>`"
+            )
+    return warnings
+
+
+def _source_counts(conn: sqlite3.Connection, source_id: int) -> dict[str, int]:
+    """Count items, lineage outcomes, review instances, and verdicts for `source_id`.
+
+    Walks `outcome_inputs` in Python from one read of its edges because `outcome_inputs`
+    is indexed by `outcome_id`, not `upstream_outcome_id`. Shared downstream outcomes
+    (group and run outcomes fed by multiple sources) count for every source that feeds them.
+    """
+    items = conn.execute("SELECT count(*) FROM items WHERE source_id = ?", (source_id,)).fetchone()[
+        0
+    ]
+    direct = {
+        row[0]
+        for row in conn.execute(
+            "SELECT o.id FROM outcomes o "
+            "LEFT JOIN item_versions v ON v.id = o.item_version_id "
+            "JOIN items i ON i.id = coalesce("
+            "    v.item_id,"
+            "    CASE WHEN o.subject_kind = 'item' AND substr(o.subject_key, 1, 5) = 'item:'"
+            "              AND substr(o.subject_key, 6) GLOB '[0-9]*'"
+            "         THEN CAST(substr(o.subject_key, 6) AS INTEGER) END"
+            ") WHERE i.source_id = ?",
+            (source_id,),
+        )
+    }
+    if not direct:
+        return {"items": items, "outcomes": 0, "verdict_instances": 0, "verdicts": 0}
+    downstream: dict[int, list[int]] = {}
+    for out_id, up_id in conn.execute("SELECT outcome_id, upstream_outcome_id FROM outcome_inputs"):
+        downstream.setdefault(up_id, []).append(out_id)
+    reached = set(direct)
+    stack = list(direct)
+    while stack:
+        cur = stack.pop()
+        for nxt in downstream.get(cur, ()):
+            if nxt not in reached:
+                reached.add(nxt)
+                stack.append(nxt)
+    instance_ids = {
+        row[0]
+        for row in conn.execute("SELECT id, outcome_id FROM review_instances")
+        if row[1] in reached
+    }
+    verdicts = (
+        sum(
+            1
+            for (inst_id,) in conn.execute("SELECT instance_id FROM verdicts")
+            if inst_id in instance_ids
+        )
+        if instance_ids
+        else 0
+    )
+    return {
+        "items": items,
+        "outcomes": len(reached),
+        "verdict_instances": len(instance_ids),
+        "verdicts": verdicts,
+    }
+
+
+def _match_old_prefix(uri: str, ws_root: Path, old_prefixes: tuple[Path, ...]) -> Path | None:
+    resolved_str = resolve_source_uri(uri, ws_root, FOLDER)
+    candidates: list[Path] = [Path(resolved_str), Path(resolved_str).resolve()]
+    raw = Path(uri)
+    if raw.is_absolute():
+        candidates.extend([raw, raw.resolve()])
+    for cand in candidates:
+        for prefix in old_prefixes:
+            if cand.is_relative_to(prefix):
+                return cand.relative_to(prefix)
+    return None
+
+
+def relocate_sources(
+    ws: Workspace,
+    old: Path,
+    new: Path,
+    *,
+    dry_run: bool = False,
+) -> list[dict[str, Any]]:
+    """Rewrite active folder sources at or under `old` to `new`, keeping source ids."""
+    new_expanded = new.expanduser()
+    new_resolved = new_expanded.resolve()
+    if not new_resolved.is_dir():
+        raise ValueError(f"new folder {new} does not exist or is not a directory")
+
+    old_expanded = old.expanduser()
+    old_prefixes = tuple(
+        dict.fromkeys((old_expanded.resolve(), Path(os.path.abspath(old_expanded))))
+    )
+
+    conn = ws.conn
+    rows = conn.execute(
+        "SELECT id, kind, uri, role FROM sources WHERE kind = ? AND retired_at IS NULL ORDER BY id",
+        (FOLDER,),
+    ).fetchall()
+
+    matched: list[tuple[sqlite3.Row, Path]] = []
+    for row in rows:
+        rel = _match_old_prefix(row["uri"], ws.root, old_prefixes)
+        if rel is not None:
+            matched.append((row, rel))
+
+    if not matched:
+        raise ValueError(f"no folder source in {ws.root} is at or under {old}")
+
+    relocated: list[dict[str, Any]] = []
+    for row, rel in matched:
+        target_folder = check_folder_source(new_resolved / rel, ws.root)
+        new_uri = format_folder_uri(target_folder, ws.root)
+        for other in rows:
+            if other["id"] == row["id"]:
+                continue
+            other_resolved = Path(resolve_source_uri(other["uri"], ws.root, FOLDER)).resolve()
+            if other["uri"] == new_uri or other_resolved == target_folder:
+                c1 = _source_counts(conn, row["id"])
+                c2 = _source_counts(conn, other["id"])
+                raise ValueError(
+                    f"relocating source #{row['id']} ({row['uri']} -> {new_uri}) collides with"
+                    f" existing source #{other['id']} ({other['uri']});"
+                    f" source #{row['id']} ({row['uri']}) has {c1['items']} item(s),"
+                    f" {c1['outcomes']} outcome(s), {c1['verdict_instances']} verdict instance(s),"
+                    f" {c1['verdicts']} verdict(s);"
+                    f" source #{other['id']} ({other['uri']}) has {c2['items']} item(s),"
+                    f" {c2['outcomes']} outcome(s), {c2['verdict_instances']} verdict instance(s),"
+                    f" {c2['verdicts']} verdict(s)"
+                    " (lineage counts include downstream group and run outcomes; a shared"
+                    " downstream outcome counts for every source that feeds it)."
+                    " To resolve, run `commissure sources retire <source-id>` on the unreviewed"
+                    " source, then rerun `commissure sources relocate`"
+                )
+        relocated.append({"id": row["id"], "old_uri": row["uri"], "new_uri": new_uri})
+
+    if not dry_run:
+        with transaction(conn):
+            for entry in relocated:
+                conn.execute(
+                    "UPDATE sources SET uri = ? WHERE id = ?",
+                    (entry["new_uri"], entry["id"]),
+                )
+    return relocated
+
+
+def retire_source(
+    ws: Workspace,
+    source_id: int,
+    *,
+    dry_run: bool = False,
+    trigger: str = "manual",
+) -> dict[str, Any]:
+    """Tombstone every current item of `source_id` in one run and mark the source retired."""
+    conn = ws.conn
+    row = conn.execute(
+        "SELECT id, kind, uri, role, retired_at FROM sources WHERE id = ?", (source_id,)
+    ).fetchone()
+    if row is None:
+        raise ValueError(f"no source #{source_id} in {ws.root}")
+    if row["retired_at"] is not None:
+        raise ValueError(f"source #{source_id} ({row['uri']}) is already retired")
+
+    counts = _source_counts(conn, source_id)
+    if counts["verdict_instances"] > 0:
+        raise ValueError(
+            f"cannot retire source #{source_id} ({row['uri']}): it has"
+            f" {counts['verdict_instances']} verdict instance(s) and {counts['verdicts']}"
+            " verdict(s) in its lineage (shared downstream outcomes count for every source"
+            " that feeds them)"
+        )
+
+    current_rows = conn.execute(
+        "SELECT i.id AS item_id, v.id AS version_id, v.role"
+        " FROM items i"
+        " JOIN item_versions v ON v.item_id = i.id AND v.is_current = 1 AND v.tombstone = 0"
+        " WHERE i.source_id = ? ORDER BY i.id",
+        (source_id,),
+    ).fetchall()
+
+    run_id: int | None = None
+    if not dry_run:
+        now = utc_now()
+        status = "succeeded" if current_rows else "noop"
+        config_json = canonical({"source_id": source_id})
+        with transaction(conn):
+            run_id = conn.execute(
+                "INSERT INTO runs (step, trigger, status, source_id, started_at, finished_at,"
+                " config, discovered, added, changed, unchanged, removed)"
+                " VALUES ('retire', ?, ?, ?, ?, ?, ?, ?, 0, 0, 0, ?)",
+                (
+                    trigger,
+                    status,
+                    source_id,
+                    now,
+                    now,
+                    config_json,
+                    len(current_rows),
+                    len(current_rows),
+                ),
+            ).lastrowid
+            for cur in current_rows:
+                _retire(conn, cur["version_id"])
+                conn.execute(
+                    "INSERT INTO item_versions (item_id, run_id, predecessor_id, role,"
+                    " tombstone, is_current, created_at) VALUES (?, ?, ?, ?, 1, 1, ?)",
+                    (cur["item_id"], run_id, cur["version_id"], cur["role"], now),
+                )
+            conn.execute("UPDATE sources SET retired_at = ? WHERE id = ?", (now, source_id))
+
+    return {
+        "source_id": source_id,
+        "uri": row["uri"],
+        "role": row["role"],
+        "run_id": run_id,
+        "tombstoned": len(current_rows),
+        "counts": counts,
+        "note": (
+            "lineage counts include downstream group and run outcomes; a shared downstream"
+            " outcome counts for every source that feeds it"
+        ),
+    }
 
 
 def ingest_folder(
@@ -214,9 +500,12 @@ def ingest_folder(
     """
     conn = ws.conn
     folder = check_folder_source(folder, ws.root)
-    source_id = register_source(conn, FOLDER, str(folder), role)
+    stored_uri = format_folder_uri(folder, ws.root)
+    _adopt_absolute_source(conn, folder, stored_uri)
+    warnings = _stale_folder_warnings(conn, ws.root, folder, stored_uri, role)
+    source_id = register_source(conn, FOLDER, stored_uri, role)
     run_id = start_run(conn, "ingest", trigger=trigger, config=config, source_id=source_id)
-    result = IngestResult(run_id=run_id, status="running", source_id=source_id)
+    result = IngestResult(run_id=run_id, status="running", source_id=source_id, warnings=warnings)
     try:
         _ingest(
             ws,

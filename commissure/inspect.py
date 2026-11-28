@@ -18,7 +18,14 @@ from rich.console import Console
 from rich.markup import escape
 from rich.table import Table
 
-from commissure.workspace import BLOBS_DIR, DB_NAME, MIGRATIONS, BlobStore, WorkspaceError
+from commissure.workspace import (
+    BLOBS_DIR,
+    DB_NAME,
+    MIGRATIONS,
+    BlobStore,
+    WorkspaceError,
+    resolve_source_uri,
+)
 
 # Columns a run may leave NULL. NULL means "this step does not measure it".
 SIGNALS = (
@@ -136,7 +143,9 @@ def inspect_workspace(
         if run is None and call is not None and call_detail is not None:
             target_run_id = call_detail["run_id"]
         has_run_scope = run is not None or (call is not None and call_detail is not None)
-        subject_keys = _resolve_subject_keys(conn, subject) if subject is not None else None
+        subject_keys = (
+            _resolve_subject_keys(conn, subject, root=root) if subject is not None else None
+        )
         subject_runs = _subject_run_ids(conn, subject_keys) if subject_keys is not None else None
 
         runs = [
@@ -194,6 +203,7 @@ def inspect_workspace(
             "runs": runs,
             "latest_runs": _runs(conn, "latest_runs"),
             "outcomes": outcomes,
+            "graph": [r for r in _graph(conn) if _stage_matches(r["stage"], stage)],
             "drift": _drift(conn),
             "issues": issues,
             "llm_calls_by_run": llm_by_run,
@@ -231,7 +241,8 @@ def render(report: dict[str, Any], console: Console) -> None:
         console.print(
             f"{counts['sources']} sources, {counts['current_items']} current items, "
             f"{counts['item_versions']} versions, {counts['tombstones']} tombstones, "
-            f"{counts['entities']} entities, {counts['edges']} edges"
+            f"{counts['current_entities']} current entities ({counts['entities']} stored), "
+            f"{counts['current_edges']} current edges ({counts['edges']} stored)"
         )
         if counts["by_role"]:
             roles = Table("role", "current items", title="Items by role", title_justify="left")
@@ -270,6 +281,15 @@ def render(report: dict[str, Any], console: Console) -> None:
                     row["input_stale"],
                 ]
                 for row in ws["outcomes"]
+            ],
+        )
+        _table(
+            console,
+            "Current graph",
+            ["stage", "table", "kind", "n", "unresolved", "stale"],
+            [
+                [row["stage"], row["table"], row["kind"], row["n"], row["unresolved"], row["stale"]]
+                for row in ws["graph"]
             ],
         )
         _table(
@@ -554,12 +574,14 @@ def _counts(conn: sqlite3.Connection) -> dict[str, Any]:
     row = conn.execute(
         """
         SELECT
-            (SELECT count(*) FROM sources) AS sources,
+            (SELECT count(*) FROM sources WHERE retired_at IS NULL) AS sources,
             (SELECT count(*) FROM current_items) AS current_items,
             (SELECT count(*) FROM item_versions) AS item_versions,
             (SELECT count(*) FROM item_versions WHERE tombstone = 1) AS tombstones,
             (SELECT count(*) FROM entities) AS entities,
-            (SELECT count(*) FROM edges) AS edges
+            (SELECT count(*) FROM edges) AS edges,
+            (SELECT count(*) FROM current_entities) AS current_entities,
+            (SELECT count(*) FROM current_edges) AS current_edges
         """
     ).fetchone()
     by_role = {
@@ -595,6 +617,24 @@ def _outcomes(conn: sqlite3.Connection) -> list[dict[str, Any]]:
         FROM current_outcomes
         GROUP BY stage, outcome
         ORDER BY stage, outcome
+        """
+    ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def _graph(conn: sqlite3.Connection) -> list[dict[str, Any]]:
+    """Current entities and edges per (stage, kind); `unresolved` counts edge targets
+    kept as raw text, `stale` rows whose emitting outcome is stale for any reason."""
+    stale = "sum(version_stale OR code_stale OR params_stale OR input_stale)"
+    rows = conn.execute(
+        f"""
+        SELECT stage, 'entity' AS "table", kind, count(*) AS n, NULL AS unresolved,
+               {stale} AS stale
+        FROM current_entities GROUP BY stage, kind
+        UNION ALL
+        SELECT stage, 'edge', kind, count(*), count(target_unresolved), {stale}
+        FROM current_edges GROUP BY stage, kind
+        ORDER BY stage, "table" DESC, kind
         """
     ).fetchall()
     return [dict(row) for row in rows]
@@ -683,7 +723,9 @@ def _resolve_run_selector(
 _AMBIGUOUS_SHOWN = 20  # matches listed in the error; the rest are counted, never dropped silently
 
 
-def _resolve_subject_keys(conn: sqlite3.Connection, subject: str) -> set[str]:
+def _resolve_subject_keys(
+    conn: sqlite3.Connection, subject: str, root: Path | None = None
+) -> set[str]:
     """Subject keys for `subject`; a usage error when nothing or more than one item matches.
 
     A bare name may be a group key, an item id, or a locator. An exact locator wins; a
@@ -701,7 +743,7 @@ def _resolve_subject_keys(conn: sqlite3.Connection, subject: str) -> set[str]:
             keys.add(f"item:{subj}")
         sql = (
             "SELECT i.id, i.locator, s.uri FROM items i JOIN sources s ON s.id = i.source_id"
-            " WHERE {} ORDER BY i.id"
+            " WHERE s.retired_at IS NULL AND {} ORDER BY i.id"
         )
         matches = conn.execute(sql.format("i.locator = ?"), (subj,)).fetchall()
         if not matches:
@@ -710,7 +752,9 @@ def _resolve_subject_keys(conn: sqlite3.Connection, subject: str) -> set[str]:
             ).fetchall()
         if len(matches) > 1:
             shown = "\n".join(
-                f"  item:{r['id']}  {r['uri']}/{r['locator']}" for r in matches[:_AMBIGUOUS_SHOWN]
+                f"  item:{r['id']}  "
+                f"{resolve_source_uri(r['uri'], root) if root else r['uri']}/{r['locator']}"
+                for r in matches[:_AMBIGUOUS_SHOWN]
             )
             more = len(matches) - _AMBIGUOUS_SHOWN
             raise ValueError(
@@ -760,7 +804,7 @@ def _subject_detail(conn: sqlite3.Connection, root: Path, keys: set[str]) -> dic
         "keys": sorted(keys),
         "items": [_item_detail(conn, blobs, v) for v in _subject_item_versions(conn, keys)],
         "records": _subject_records(conn, keys),
-        "evidence": _subject_evidence(conn, keys),
+        "evidence": _subject_evidence(conn, keys, root=root),
     }
 
 
@@ -768,7 +812,11 @@ _CONTEXT_CHARS = 80  # text shown on each side of a span
 
 
 def _subject_evidence(
-    conn: sqlite3.Connection, keys: set[str], *, under: str | None = None
+    conn: sqlite3.Connection,
+    keys: set[str],
+    *,
+    root: Path | None = None,
+    under: str | None = None,
 ) -> list[dict[str, Any]]:
     """The subject's current evidence (`evidence_review`), ready to check against the original.
 
@@ -812,7 +860,10 @@ def _subject_evidence(
     statuses: dict[str, tuple[str | None, str | None]] = {}
     out = []
     for r in rows:
-        original = Path(r["source_uri"]) / r["locator"]
+        source_uri = (
+            resolve_source_uri(r["source_uri"], root) if root is not None else r["source_uri"]
+        )
+        original = Path(source_uri) / r["locator"]
         if str(original) not in statuses:
             status = _original_status(original, r["size_bytes"])
             statuses[str(original)] = (status, original.as_uri() if status == "present" else None)
@@ -903,8 +954,14 @@ def _item_detail(
         (version_id,),
     ).fetchone()
     detail = dict(row)
+    if row["source_kind"] == "folder":
+        detail["source_uri"] = resolve_source_uri(
+            row["source_uri"], blobs.root.parent, row["source_kind"]
+        )
     detail["key"] = f"item:{row['item_id']}"
-    original = Path(row["source_uri"]) / row["locator"] if row["source_kind"] == "folder" else None
+    original = (
+        Path(detail["source_uri"]) / row["locator"] if row["source_kind"] == "folder" else None
+    )
     detail["original_path"] = str(original) if original is not None else None
     detail["original_status"] = _original_status(original, row["size_bytes"])
     blob = blobs.path_for(row["bytes_hash"]) if row["bytes_hash"] else None

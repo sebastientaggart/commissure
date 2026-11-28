@@ -205,13 +205,17 @@ def search(
         params.append(parser)
     sql += " ORDER BY ct.extracted_text_id"
 
+    # The query alone, against the index alone: FTS5 parses it even when the index is
+    # empty, so an error here is the caller's input. Classifying the main query's errors
+    # by message instead would report a core bug ("no such column: ct.stale") as one.
     try:
-        rows = conn.execute(sql, params).fetchall()
+        conn.execute(
+            "SELECT 1 FROM extracted_text_fts WHERE extracted_text_fts MATCH ? LIMIT 1",
+            (match,),
+        ).fetchall()
     except sqlite3.OperationalError as exc:
-        msg = str(exc).lower()
-        if "fts5" in msg or "syntax" in msg or "match" in msg:
-            raise SearchUsageError(f"invalid FTS query: {exc}") from exc
-        raise
+        raise SearchUsageError(f"invalid FTS query: {exc}") from exc
+    rows = conn.execute(sql, params).fetchall()
 
     if parser is None:
         by_item: dict[int, dict[str, sqlite3.Row]] = {}

@@ -782,6 +782,145 @@ MIGRATIONS: list[str] = [
     CREATE TRIGGER verdicts_append_only_d BEFORE DELETE ON verdicts
         BEGIN SELECT RAISE(ABORT, 'review records are append-only'); END;
     """,
+    # 8: the graph (commissure/graph.py). Entities and edges belong to the outcome that
+    # emitted them, like records and evidence, so the current views follow the same
+    # snapshot rules as current_outcomes and a rerun supersedes what it replaced. The
+    # column is nullable only because ALTER TABLE cannot add NOT NULL; core writes it on
+    # every row, and a row without it never appears in a current view.
+    """
+    ALTER TABLE entities ADD COLUMN outcome_id INTEGER REFERENCES outcomes (id);
+    ALTER TABLE edges ADD COLUMN outcome_id INTEGER REFERENCES outcomes (id);
+    CREATE INDEX entities_outcome ON entities (outcome_id);
+    CREATE INDEX entities_kind_key ON entities (kind, json_extract(attributes, '$.key'));
+    CREATE INDEX edges_outcome ON edges (outcome_id);
+    CREATE INDEX entity_provenance_version ON entity_provenance (item_version_id);
+    CREATE INDEX edge_provenance_version ON edge_provenance (item_version_id);
+
+    CREATE VIEW current_entities AS
+    SELECT e.id AS entity_id, e.kind, json_extract(e.attributes, '$.key') AS key,
+           e.attributes, co.outcome_id, co.run_id, co.stage, co.subject_kind,
+           co.subject_key, co.outcome, co.version_stale, co.code_stale, co.params_stale,
+           co.input_stale
+    FROM current_outcomes co
+    JOIN entities e ON e.outcome_id = co.outcome_id;
+
+    -- Entity endpoints are shown by (kind, key), item endpoints by 'item:<id>', so a
+    -- caller joins across outcomes by natural key rather than by row id.
+    CREATE VIEW current_edges AS
+    SELECT g.id AS edge_id, g.kind,
+           se.kind AS source_entity_kind, json_extract(se.attributes, '$.key')
+               AS source_entity_key,
+           CASE WHEN g.source_item_id IS NOT NULL THEN 'item:' || g.source_item_id END
+               AS source_item_key,
+           te.kind AS target_entity_kind, json_extract(te.attributes, '$.key')
+               AS target_entity_key,
+           CASE WHEN g.target_item_id IS NOT NULL THEN 'item:' || g.target_item_id END
+               AS target_item_key,
+           g.target_unresolved, g.weight, g.evidence,
+           co.outcome_id, co.run_id, co.stage, co.subject_kind, co.subject_key, co.outcome,
+           co.version_stale, co.code_stale, co.params_stale, co.input_stale
+    FROM current_outcomes co
+    JOIN edges g ON g.outcome_id = co.outcome_id
+    LEFT JOIN entities se ON se.id = g.source_entity_id
+    LEFT JOIN entities te ON te.id = g.target_entity_id;
+    """,
+    # 9: source retirement (`sources.retired_at`, partial unique index on active sources)
+    # and downstream `input_stale` when a consumed item is tombstoned or superseded.
+    """
+    PRAGMA legacy_alter_table = ON;
+    CREATE TABLE sources_new (
+        id          INTEGER PRIMARY KEY,
+        kind        TEXT NOT NULL,
+        uri         TEXT NOT NULL,
+        role        TEXT NOT NULL,
+        created_at  TEXT NOT NULL,
+        retired_at  TEXT
+    );
+    INSERT INTO sources_new (id, kind, uri, role, created_at)
+        SELECT id, kind, uri, role, created_at FROM sources;
+    DROP TABLE sources;
+    ALTER TABLE sources_new RENAME TO sources;
+    CREATE UNIQUE INDEX sources_active_kind_uri
+        ON sources (kind, uri) WHERE retired_at IS NULL;
+    PRAGMA legacy_alter_table = OFF;
+
+    DROP VIEW current_outcomes;
+    CREATE VIEW current_outcomes AS
+    WITH RECURSIVE latest_snapshot(step, run_id) AS (
+        SELECT r.step, max(r.id)
+        FROM runs r
+        WHERE r.remaining = 0
+        GROUP BY r.step
+        UNION ALL
+        SELECT ls.step, r.resumes_run_id
+        FROM latest_snapshot ls
+        JOIN runs r ON r.id = ls.run_id
+        WHERE r.resumes_run_id IS NOT NULL
+    )
+    SELECT o.id AS outcome_id, o.run_id, o.stage, o.subject_kind, o.subject_key,
+           o.item_version_id, o.outcome, o.reason_code, o.diagnostics, o.record_id,
+           o.extracted_text_id, o.input_fp, o.stage_fp, o.params,
+           CASE WHEN o.subject_kind = 'item' AND o.stage != 'ingest'
+                THEN o.item_version_id IS NOT ci.item_version_id ELSE 0 END AS version_stale,
+           (s.stage_fp IS NOT NULL AND s.stage_fp != o.stage_fp) AS code_stale,
+           (s.params IS NOT NULL AND s.params != o.params) AS params_stale,
+           EXISTS (WITH RECURSIVE up(id) AS (
+                       SELECT oi.upstream_outcome_id FROM outcome_inputs oi
+                       WHERE oi.outcome_id = o.id
+                       UNION
+                       SELECT oi.upstream_outcome_id FROM outcome_inputs oi
+                       JOIN up ON oi.outcome_id = up.id
+                       JOIN outcomes mid ON mid.id = up.id
+                       WHERE mid.id = (
+                           SELECT max(m2.id) FROM outcomes m2
+                           WHERE m2.stage = mid.stage AND m2.subject_key = mid.subject_key
+                       )
+                   )
+                   SELECT 1 FROM up
+                   JOIN outcomes u ON u.id = up.id
+                   JOIN outcomes now ON now.id = (
+                       SELECT max(u2.id) FROM outcomes u2
+                       WHERE u2.stage = u.stage AND u2.subject_key = u.subject_key)
+                   LEFT JOIN current_items uci
+                          ON u.subject_kind = 'item'
+                         AND uci.item_id = CAST(substr(u.subject_key, 6) AS INTEGER)
+                   LEFT JOIN records ur ON ur.id = u.record_id
+                   LEFT JOIN records nr ON nr.id = now.record_id
+                   LEFT JOIN extracted_text ue ON ue.id = u.extracted_text_id
+                   LEFT JOIN extracted_text ne ON ne.id = now.extracted_text_id
+                   WHERE (u.subject_kind = 'item'
+                          AND uci.item_version_id IS NOT now.item_version_id)
+                      OR (now.id != u.id
+                          AND (now.outcome IN ('quarantined', 'skipped')
+                               OR coalesce(nr.payload_hash, ne.text_hash)
+                                  IS NOT coalesce(ur.payload_hash, ue.text_hash))))
+               AS input_stale
+    FROM outcomes o
+    LEFT JOIN stages s ON s.stage = o.stage
+    LEFT JOIN current_items ci
+           ON o.subject_kind = 'item' AND ci.item_id = CAST(substr(o.subject_key, 6) AS INTEGER)
+    WHERE (
+        (o.subject_kind = 'item' AND o.stage = 'ingest'
+         AND o.run_id = (
+             SELECT max(r.id) FROM runs r
+             JOIN items i2 ON i2.source_id = r.source_id
+             WHERE r.step = 'ingest'
+               AND 'item:' || i2.id = o.subject_key
+               AND (r.status IN ('succeeded', 'noop') OR r.quarantined > 0)
+         ))
+        OR (o.subject_kind = 'item' AND o.stage != 'ingest'
+            AND ci.item_id IS NOT NULL
+            AND o.id = (SELECT max(o2.id) FROM outcomes o2
+                        WHERE o2.stage = o.stage AND o2.subject_key = o.subject_key))
+        OR (o.subject_kind IN ('group', 'run')
+            AND o.run_id IN (SELECT run_id FROM latest_snapshot WHERE step = o.stage)
+            AND o.id = (SELECT max(o2.id) FROM outcomes o2
+                        WHERE o2.stage = o.stage AND o2.subject_key = o.subject_key
+                          AND o2.run_id IN (
+                              SELECT run_id FROM latest_snapshot WHERE step = o.stage
+                          )))
+    );
+    """,
 ]
 
 
@@ -808,6 +947,27 @@ def utc_now() -> str:
 def hash_file(path: Path) -> str:
     with path.open("rb") as f:
         return hashlib.file_digest(f, "sha256").hexdigest()
+
+
+def format_folder_uri(folder: Path, ws_root: Path) -> str:
+    """Store folder sources under the workspace's parent folder as relative POSIX paths.
+
+    A solution folder (`ws_root.parent` in the standard layout) may move or be renamed;
+    storing sources inside it as `intake/batch` keeps source identity stable across moves,
+    while outside sources remain absolute paths.
+    """
+    resolved = folder.resolve()
+    base = ws_root.resolve().parent
+    if resolved != base and resolved.is_relative_to(base):
+        return resolved.relative_to(base).as_posix()
+    return str(resolved)
+
+
+def resolve_source_uri(uri: str, ws_root: Path, kind: str = "folder") -> str:
+    """Resolve a stored source URI to an absolute path for readers."""
+    if kind == "folder" and not Path(uri).is_absolute():
+        return str(ws_root.resolve().parent / Path(uri))
+    return uri
 
 
 _CONN_LOCK = threading.RLock()
@@ -849,16 +1009,22 @@ def init_schema(conn: sqlite3.Connection) -> int:
         )
     for version in range(current, len(MIGRATIONS)):
         # executescript would commit a pending transaction first, so the transaction
-        # and the version bump live inside the script and apply atomically.
+        # and the version bump live inside the script and apply atomically. Foreign keys
+        # are toggled outside the transaction so table-rebuilding migrations can replace
+        # referenced tables cleanly.
         script = (
+            f"PRAGMA foreign_keys = OFF;\n"
             f"BEGIN IMMEDIATE;\n{MIGRATIONS[version]}\n"
-            f"PRAGMA user_version = {version + 1};\nCOMMIT;"
+            f"PRAGMA user_version = {version + 1};\nCOMMIT;\n"
+            f"PRAGMA foreign_keys = ON;"
         )
         try:
             conn.executescript(script)
         except BaseException:
             if conn.in_transaction:
                 conn.execute("ROLLBACK")
+            conn.execute("PRAGMA legacy_alter_table = OFF")
+            conn.execute("PRAGMA foreign_keys = ON")
             raise
     return len(MIGRATIONS)
 

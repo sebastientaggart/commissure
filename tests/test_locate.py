@@ -121,3 +121,26 @@ def test_empty_structure_and_none_are_misses() -> None:
     assert locate_offset("abc", None, 0) is None
     assert locate_offset("abc", {}, 0) is None
     assert locate_offset("abc", {"blocks": []}, 1) is None
+
+
+def test_legibility_counts_page_blocks_ocr_and_unreadable() -> None:
+    from commissure.patterns import Legibility, legibility
+
+    structure = {
+        "blocks": [
+            {"kind": "page", "page": 1, "start": 0, "end": 5},
+            {"kind": "page", "page": 2, "start": 5, "end": 9, "flags": ["ocr"], "confidence": 90},
+            {"kind": "page", "page": 3, "start": 9, "end": 9, "flags": ["ocr"], "confidence": 70},
+            {"kind": "page", "page": 4, "start": 9, "end": 9, "status": "unreadable"},
+            {"kind": "heading", "start": 0, "end": 3},
+        ]
+    }
+    assert legibility(structure) == Legibility(4, 2, 1, 80.0)
+    pages, ocr_pages, unreadable, mean = legibility(structure)  # unpacks like a tuple
+    assert (pages, ocr_pages, unreadable, mean) == (4, 2, 1, 80.0)
+    # No page blocks (a DOCX, a JSON row): pages unknown, never zero pages of text.
+    assert legibility({"blocks": [{"kind": "heading", "start": 0, "end": 3}]}) == (None, 0, 0, None)
+    assert legibility(None) == (None, 0, 0, None)
+    # OCR pages without a confidence give no mean rather than a made-up one.
+    no_conf = {"blocks": [{"kind": "page", "start": 0, "end": 1, "flags": ["ocr"]}]}
+    assert legibility(no_conf) == (1, 1, 0, None)

@@ -21,12 +21,12 @@ When an operational cycle finishes, its workspace remains a self-contained archi
 
 ## 2. Source Identity vs. Tool Drift
 
-The unit of input in core is an **Item**—a PDF, DOCX, XLSX workbook, CSV, JSON document, or structured row—tracked across time without conflating upstream source edits with local parser changes:
+The unit of input in core is an **Item**—a PDF, DOCX, XLSX workbook, CSV, JSON document, HTML page, or structured row—tracked across time without conflating upstream source edits with local parser changes:
 
-- **`(source, locator)` → `item_version`:** Each ingested file or object is mapped to append-only `item_version` rows recording `bytes_hash`, `size_bytes`, `role`, `run_id`, explicit `predecessor`, and `tombstone` on removal.
+- **`(source, locator)` → `item_version`:** Each ingested file or object is mapped to append-only `item_version` rows recording `bytes_hash`, `size_bytes`, `role`, `run_id`, explicit `predecessor`, and `tombstone` on removal. Folder sources under the workspace's parent folder (`solutions/<name>/` in the standard layout) are stored in `sources.uri` as POSIX paths relative to that folder (`intake/<batch>`) so moving or renaming a solution folder preserves source identity; folder sources outside it are stored as absolute paths. Stored URIs resolve to absolute paths on read (`Item.source.uri`, `inspect`, `review`, `serve`), `commissure sources relocate <old> <new>` rewrites moved or external folder source paths in place without changing source IDs, and `commissure sources retire <source-id>` tombstones a duplicate or obsolete source's current items and sets `sources.retired_at` (refusing if any outcome in its downstream lineage has review instances) so retired rows never collide with active sources.
 - **`(item_version, parser, parser_version)` → `extracted_text`:** Parsed text and structural metadata (`blocks`, `tables`, `metadata`) are stored per parser and computed parser version, and indexed in SQLite FTS5 for phrase and boolean search without a model call.
 - **Drift classification:** `text_hash` is compared only under the same parser and `parser_version`. If a file's `bytes_hash` changes (for example, a PDF title property is touched) while its `text_hash` under the same parser stays identical, ingest/parse classifies the change as `metadata_only` rather than content drift. Upgrading a parser writes new `extracted_text` rows without misattributing the difference to the upstream source.
-- **Generic graph tables (`entities` and `edges`):** Core owns the table shapes and item-level provenance; recipes own domain meaning and populate them during analysis stages.
+- **Generic graph tables (`entities` and `edges`):** Core owns the table shapes and item-level provenance; recipes own domain meaning and emit `EntitySpec` / `EdgeSpec` beside a payload in `RecordEnvelope`. Core (`commissure/graph.py`) checks provenance and endpoints and keys every row to its outcome, so `current_entities` and `current_edges` follow `current_outcomes` snapshot rules.
 
 ---
 
@@ -40,7 +40,7 @@ Before any recipe stage runs, Commissure evaluates whether each input file can a
   - A scanned page with a short Bates stamp on top is rejected as `image_dominant`.
   - Pages that fail the gate are recorded with machine-readable reasons and never passed downstream as text.
   - Undecodable glyphs on otherwise readable pages become `U+FFFD` (`\ufffd`) with an `unmapped_glyphs` diagnostic—never raw `(cid:N)` strings or control bytes.
-- **Fast default parsers + opt-in `ocr`:** `commissure run --step parse` runs the default parsers (`pdfplumber`, `docx`, `xlsx`, `csv`, `json`) in a bounded local process pool. Running `commissure run --step parse --parser ocr` invokes a locally installed Tesseract binary on pages the gate rejected, emitting `warning` text with per-page `ocr` flags, orientation detection (`ocr_rotated_180`), and confidence scores. Stages opt into OCR text explicitly via `Stage(..., text=("ocr", "default"))`.
+- **Fast default parsers + opt-in `ocr`:** `commissure run --step parse` runs the default parsers (`pdfplumber`, `docx`, `xlsx`, `csv`, `json`, `html`) in a bounded local process pool. The `html` parser (standard library) reads one content root (`<main>`, else a single `<article>`, else `<body>` with `content_root_body`), drops navigation, scripts, forms, and hidden elements inside it (counted in `metadata.dropped`), and decodes by byte-order mark, declared charset, then UTF-8 (`encoding_fallback` when it falls back to Windows-1252). Running `commissure run --step parse --parser ocr` invokes a locally installed Tesseract binary on pages the gate rejected, emitting `warning` text with per-page `ocr` flags, orientation detection (`ocr_rotated_180`), and confidence scores. Stages opt into OCR text explicitly via `Stage(..., text=("ocr", "default"))`.
 
 ---
 

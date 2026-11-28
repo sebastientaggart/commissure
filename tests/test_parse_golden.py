@@ -22,7 +22,7 @@ from commissure.ingest import DEFAULT_IGNORE
 
 FIXTURES = Path(__file__).parent / "fixtures"
 GOLDEN = Path(__file__).parent / "golden" / "parse"
-CORPORA = ("probe_corpus", "real_samples")
+CORPORA = ("probe_corpus", "real_samples", "html_corpus")
 UPDATE = os.environ.get("COMMISSURE_UPDATE_GOLDEN") == "1"
 
 
@@ -71,7 +71,9 @@ def test_parse_matches_golden(cli, tmp_path, corpus):
     shutil.copytree(FIXTURES / corpus, source)
     ws_root = tmp_path / "ws"
     assert cli.ingest(ws_root, source)[0] == 0
-    for extra in ([], ["--parser", "pdfium"]):
+    # The pdfium pass only where there are PDFs: a parse that finds nothing fails, by design.
+    has_pdf = any(p.suffix.lower() == ".pdf" for p in source.rglob("*"))
+    for extra in ([], ["--parser", "pdfium"]) if has_pdf else ([],):
         result = cli("run", "--step", "parse", "--workspace", str(ws_root), "--json", *extra)
         assert result.exit_code == 0, result.output
 
