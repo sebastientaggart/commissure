@@ -17,6 +17,10 @@ Commands (in `solutions/<name>/`, `--recipe` and `--workspace` default to `recip
     commissure serve [--recipe R] [--workspace W] [--host 127.0.0.1] [--port 8000]
     commissure release build <target> [--skip-tests] [--offline] [--allow-dirty] [--json]
     commissure release publish <target> [--tarball] [--push] [--json]
+    commissure dev clone <solution-remote> <dir> [--rev SHA] [--core-url URL] [--name NAME]
+    commissure dev new <dir> --name <name> [--remote URL] [--rev SHA] [--core-url URL]
+    commissure dev repin <full-sha>    (inside a wrapper)
+    commissure dev refresh             (inside a wrapper)
 
 Exit codes are deterministic so OS schedulers can act on them:
 
@@ -73,7 +77,7 @@ from commissure.runner import reap_abandoned, run_plan
 from commissure.scaffold import ScaffoldError, scaffold_solution
 from commissure.search import DEFAULT_LIMIT, SearchUsageError, search
 from commissure.serve import InterfaceApp, make_server
-from commissure.tools import licenses, release
+from commissure.tools import licenses, release, wrapper
 from commissure.workspace import (
     DB_NAME,
     MIGRATIONS,
@@ -1123,6 +1127,96 @@ def release_publish(
     else:
         for line in done:
             typer.echo(line)
+    raise typer.Exit(EXIT_OK)
+
+
+# --- dev (wrappers) ------------------------------------------------------------------
+
+dev_app = typer.Typer(
+    no_args_is_help=True,
+    add_completion=False,
+    help="Develop one solution outside core's repository, in a wrapper pinned to a core commit.",
+)
+app.add_typer(dev_app, name="dev")
+
+RevOpt = Annotated[
+    str | None,
+    typer.Option("--rev", help="Full core commit to pin; default: the running commissure's."),
+]
+CoreUrlOpt = Annotated[
+    str | None,
+    typer.Option(
+        "--core-url",
+        help="Core git URL; default: where the running commissure came from, else the public "
+        "repository. A file:// URL pins a local checkout (committed work only).",
+    ),
+]
+
+
+def _dev(fn, *args, **kwargs):
+    try:
+        return fn(*args, **kwargs)
+    except wrapper.UsageError as exc:
+        typer.echo(f"dev: {exc}", err=True)
+        raise typer.Exit(EXIT_USAGE) from None
+    except wrapper.WrapperError as exc:
+        typer.echo(f"dev: {exc}", err=True)
+        raise typer.Exit(EXIT_FAILED) from None
+
+
+@dev_app.command("clone")
+def dev_clone(
+    remote: Annotated[str, typer.Argument(help="The solution's git remote.")],
+    dest: Annotated[Path, typer.Argument(help="Wrapper folder to create (absent or empty).")],
+    rev: RevOpt = None,
+    core_url: CoreUrlOpt = None,
+    name: Annotated[
+        str | None, typer.Option(help="Solution name; default: the remote's last path part.")
+    ] = None,
+) -> None:
+    """Clone a solution into <dir>/solutions/<name>/ and generate a wrapper around it."""
+    out = _dev(wrapper.clone, remote, dest, rev=rev, core_url=core_url, name=name)
+    typer.echo(f"created {out}; next: cd {dest} && uv run pytest")
+    raise typer.Exit(EXIT_OK)
+
+
+@dev_app.command("new")
+def dev_new(
+    dest: Annotated[Path, typer.Argument(help="Wrapper folder to create (absent or empty).")],
+    name: Annotated[str, typer.Option(help="Solution name.")],
+    remote: Annotated[
+        str | None,
+        typer.Option(help="An empty git remote: the first commit is pushed there."),
+    ] = None,
+    rev: RevOpt = None,
+    core_url: CoreUrlOpt = None,
+) -> None:
+    """Scaffold a new solution (commissure init), commit it, and wrap it."""
+    out = _dev(wrapper.new, dest, name, rev=rev, core_url=core_url, remote=remote)
+    pushed = f", pushed to {remote}" if remote else ""
+    typer.echo(f"created {out} with solutions/{name}/ (one commit{pushed})")
+    raise typer.Exit(EXIT_OK)
+
+
+@dev_app.command("repin")
+def dev_repin(
+    sha: Annotated[str, typer.Argument(help="Full 40-character core commit.")],
+    skip_tests: Annotated[
+        bool, typer.Option("--skip-tests", help="Don't run the solution's tests afterwards.")
+    ] = False,
+) -> None:
+    """Move this wrapper's core pin; print core's CHANGELOG.md additions; run the tests."""
+    root = _dev(wrapper.find_wrapper)
+    result = _dev(wrapper.repin, root, sha, run_tests=not skip_tests, echo=typer.echo)
+    raise typer.Exit(EXIT_FAILED if result.tests else EXIT_OK)
+
+
+@dev_app.command("refresh")
+def dev_refresh() -> None:
+    """Regenerate this wrapper's generated files, keeping the pin and solutions/."""
+    root = _dev(wrapper.find_wrapper)
+    _dev(wrapper.refresh, root)
+    typer.echo(f"refreshed {root}")
     raise typer.Exit(EXIT_OK)
 
 
