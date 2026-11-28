@@ -81,6 +81,7 @@ from commissure.workspace import (
     check_root,
     lock,
     open_workspace,
+    resolve_source_uri,
 )
 
 _TEMPLATES_DIR = Path(__file__).resolve().parent / "deliver" / "templates"
@@ -1129,7 +1130,7 @@ def build_view(
             SourceInfo(
                 id=r["id"],
                 kind=r["kind"],
-                uri=r["uri"],
+                uri=resolve_source_uri(r["uri"], ws_root, r["kind"]),
                 role=r["role"],
                 created_at=r["created_at"],
                 item_count=r["item_count"],

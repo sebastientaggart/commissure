@@ -181,7 +181,14 @@ cd solutions/<name>
 uv run commissure probe intake/<batch> --json
 
 # 2. Ingest a folder as a source and classify byte drift
+#    (Sources under the solution folder are stored relatively as `intake/<batch>`;
+#     outside sources are stored as absolute paths.)
 uv run commissure run --step ingest --source intake/<batch> --role corpus --json
+
+#    If an outside source folder (or a workspace created with absolute source paths) moves,
+#    rewrite stored folder paths in place while keeping source IDs, items, and verdicts:
+uv run commissure sources relocate /old/path /new/path --dry-run --json
+uv run commissure sources relocate /old/path /new/path --json
 
 # 3. Parse current items into structured blocks, tables, and FTS5-indexed text
 uv run commissure run --step parse --json

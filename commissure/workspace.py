@@ -852,6 +852,27 @@ def hash_file(path: Path) -> str:
         return hashlib.file_digest(f, "sha256").hexdigest()
 
 
+def format_folder_uri(folder: Path, ws_root: Path) -> str:
+    """Store folder sources under the workspace's parent folder as relative POSIX paths.
+
+    A solution folder (`ws_root.parent` in the standard layout) may move or be renamed;
+    storing sources inside it as `intake/batch` keeps source identity stable across moves,
+    while outside sources remain absolute paths.
+    """
+    resolved = folder.resolve()
+    base = ws_root.resolve().parent
+    if resolved != base and resolved.is_relative_to(base):
+        return resolved.relative_to(base).as_posix()
+    return str(resolved)
+
+
+def resolve_source_uri(uri: str, ws_root: Path, kind: str = "folder") -> str:
+    """Resolve a stored source URI to an absolute path for readers."""
+    if kind == "folder" and not Path(uri).is_absolute():
+        return str(ws_root.resolve().parent / Path(uri))
+    return uri
+
+
 _CONN_LOCK = threading.RLock()
 
 

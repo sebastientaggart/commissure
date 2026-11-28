@@ -28,14 +28,22 @@ import sqlite3
 import stat
 import threading
 from collections.abc import Iterator, Sequence
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
 from commissure.limits import DEFAULT_LIMITS, LimitExceeded, Limits
 from commissure.runner import AllQuarantined, RunCancelled, canonical
 from commissure.runs import EmptyDiscovery, finish_run, start_run
-from commissure.workspace import SourceReadError, Workspace, hash_file, transaction, utc_now
+from commissure.workspace import (
+    SourceReadError,
+    Workspace,
+    format_folder_uri,
+    hash_file,
+    resolve_source_uri,
+    transaction,
+    utc_now,
+)
 
 FOLDER = "folder"
 DEFAULT_IGNORE: tuple[str, ...] = (
@@ -67,9 +75,12 @@ class IngestResult:
     removed: int = 0
     quarantined: int = 0
     error: str | None = None
+    warnings: list[str] = field(default_factory=list)
 
     def as_dict(self) -> dict[str, Any]:
-        return asdict(self)
+        out = asdict(self)
+        out.pop("warnings", None)
+        return out
 
 
 def effective_ignore(
@@ -192,6 +203,133 @@ def register_source(conn: sqlite3.Connection, kind: str, uri: str, role: str) ->
     return cur.lastrowid
 
 
+def _stale_folder_warnings(
+    conn: sqlite3.Connection,
+    ws_root: Path,
+    folder: Path,
+    stored_uri: str,
+    role: str,
+) -> list[str]:
+    """Warn when registering a new folder source while a same-role, same-name source is missing."""
+    existing = conn.execute(
+        "SELECT 1 FROM sources WHERE kind = ? AND uri = ?", (FOLDER, stored_uri)
+    ).fetchone()
+    if existing is not None:
+        return []
+    warnings: list[str] = []
+    for row in conn.execute(
+        "SELECT id, uri FROM sources WHERE kind = ? AND role = ? ORDER BY id", (FOLDER, role)
+    ):
+        resolved_path = Path(resolve_source_uri(row["uri"], ws_root, FOLDER))
+        if resolved_path.name == folder.name and not resolved_path.exists():
+            warnings.append(
+                f"existing source #{row['id']} ({row['uri']}) with role {role!r} and folder"
+                f" name {folder.name!r} no longer exists; if the folder moved, repair the"
+                " workspace with `commissure sources relocate <old> <new>`"
+            )
+    return warnings
+
+
+def _source_counts(conn: sqlite3.Connection, source_id: int) -> dict[str, int]:
+    items = conn.execute("SELECT count(*) FROM items WHERE source_id = ?", (source_id,)).fetchone()[
+        0
+    ]
+    item_join = (
+        "LEFT JOIN item_versions v ON v.id = o.item_version_id "
+        "JOIN items i ON i.id = coalesce("
+        "    v.item_id,"
+        "    CASE WHEN o.subject_kind = 'item' AND substr(o.subject_key, 1, 5) = 'item:'"
+        "              AND substr(o.subject_key, 6) GLOB '[0-9]*'"
+        "         THEN CAST(substr(o.subject_key, 6) AS INTEGER) END"
+        ") WHERE i.source_id = ?"
+    )
+    outcomes = conn.execute(
+        f"SELECT count(*) FROM outcomes o {item_join}", (source_id,)
+    ).fetchone()[0]
+    verdict_instances = conn.execute(
+        "SELECT count(*) FROM review_instances ri"
+        f" JOIN outcomes o ON o.id = ri.outcome_id {item_join}",
+        (source_id,),
+    ).fetchone()[0]
+    return {"items": items, "outcomes": outcomes, "verdict_instances": verdict_instances}
+
+
+def _match_old_prefix(uri: str, ws_root: Path, old_prefixes: tuple[Path, ...]) -> Path | None:
+    resolved_str = resolve_source_uri(uri, ws_root, FOLDER)
+    candidates: list[Path] = [Path(resolved_str), Path(resolved_str).resolve()]
+    raw = Path(uri)
+    if raw.is_absolute():
+        candidates.extend([raw, raw.resolve()])
+    for cand in candidates:
+        for prefix in old_prefixes:
+            if cand.is_relative_to(prefix):
+                return cand.relative_to(prefix)
+    return None
+
+
+def relocate_sources(
+    ws: Workspace,
+    old: Path,
+    new: Path,
+    *,
+    dry_run: bool = False,
+) -> list[dict[str, Any]]:
+    """Rewrite folder sources at or under `old` to `new`, keeping source ids."""
+    new_expanded = new.expanduser()
+    new_resolved = new_expanded.resolve()
+    if not new_resolved.is_dir():
+        raise ValueError(f"new folder {new} does not exist or is not a directory")
+
+    old_expanded = old.expanduser()
+    old_prefixes = tuple(
+        dict.fromkeys((old_expanded.resolve(), Path(os.path.abspath(old_expanded))))
+    )
+
+    conn = ws.conn
+    rows = conn.execute(
+        "SELECT id, kind, uri, role FROM sources WHERE kind = ? ORDER BY id", (FOLDER,)
+    ).fetchall()
+
+    matched: list[tuple[sqlite3.Row, Path]] = []
+    for row in rows:
+        rel = _match_old_prefix(row["uri"], ws.root, old_prefixes)
+        if rel is not None:
+            matched.append((row, rel))
+
+    if not matched:
+        raise ValueError(f"no folder source in {ws.root} is at or under {old}")
+
+    relocated: list[dict[str, Any]] = []
+    for row, rel in matched:
+        target_folder = check_folder_source(new_resolved / rel, ws.root)
+        new_uri = format_folder_uri(target_folder, ws.root)
+        for other in rows:
+            if other["id"] == row["id"]:
+                continue
+            other_resolved = Path(resolve_source_uri(other["uri"], ws.root, FOLDER)).resolve()
+            if other["uri"] == new_uri or other_resolved == target_folder:
+                c1 = _source_counts(conn, row["id"])
+                c2 = _source_counts(conn, other["id"])
+                raise ValueError(
+                    f"relocating source #{row['id']} ({row['uri']} -> {new_uri}) collides with"
+                    f" existing source #{other['id']} ({other['uri']});"
+                    f" source #{row['id']} ({row['uri']}) has {c1['items']} item(s),"
+                    f" {c1['outcomes']} outcome(s), {c1['verdict_instances']} verdict instance(s);"
+                    f" source #{other['id']} ({other['uri']}) has {c2['items']} item(s),"
+                    f" {c2['outcomes']} outcome(s), {c2['verdict_instances']} verdict instance(s)"
+                )
+        relocated.append({"id": row["id"], "old_uri": row["uri"], "new_uri": new_uri})
+
+    if not dry_run:
+        with transaction(conn):
+            for entry in relocated:
+                conn.execute(
+                    "UPDATE sources SET uri = ? WHERE id = ?",
+                    (entry["new_uri"], entry["id"]),
+                )
+    return relocated
+
+
 def ingest_folder(
     ws: Workspace,
     folder: Path,
@@ -214,9 +352,11 @@ def ingest_folder(
     """
     conn = ws.conn
     folder = check_folder_source(folder, ws.root)
-    source_id = register_source(conn, FOLDER, str(folder), role)
+    stored_uri = format_folder_uri(folder, ws.root)
+    warnings = _stale_folder_warnings(conn, ws.root, folder, stored_uri, role)
+    source_id = register_source(conn, FOLDER, stored_uri, role)
     run_id = start_run(conn, "ingest", trigger=trigger, config=config, source_id=source_id)
-    result = IngestResult(run_id=run_id, status="running", source_id=source_id)
+    result = IngestResult(run_id=run_id, status="running", source_id=source_id, warnings=warnings)
     try:
         _ingest(
             ws,

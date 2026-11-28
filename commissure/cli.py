@@ -12,6 +12,7 @@ Commands (in `solutions/<name>/`, `--recipe` and `--workspace` default to `recip
     commissure inspect [--workspace W] [--run <id|latest|failed>] [--stage S] [--subject K]
                        [--call ID] [--only-errors] [--limit N] [--json]
     commissure search <query> [--workspace W] [--limit N] [--json]
+    commissure sources relocate <old> <new> [--workspace W] [--dry-run] [--json]
     commissure serve [--recipe R] [--workspace W] [--host 127.0.0.1] [--port 8000]
     commissure release build <target> [--skip-tests] [--offline] [--allow-dirty] [--json]
     commissure release publish <target> [--tarball] [--push] [--json]
@@ -41,7 +42,7 @@ from rich.markup import escape
 from rich.table import Table
 
 from commissure import review
-from commissure.ingest import check_folder_source, effective_ignore, ingest_folder
+from commissure.ingest import check_folder_source, effective_ignore, ingest_folder, relocate_sources
 from commissure.inspect import _resolve_subject_keys, inspect_workspaces, open_readonly
 from commissure.inspect import render as render_inspect
 from commissure.limits import LimitExceeded, resolve_limits
@@ -608,6 +609,8 @@ def run(
                         ignore=resolved_ignore,
                         limits=limits,
                     )
+                    for warning in result.warnings:
+                        typer.echo(f"warning: {warning}", err=True)
                 else:
                     if loaded is not None:
                         effective = {**loaded.stages[step].params, **param_overrides}
@@ -909,7 +912,7 @@ def review_spot(
     """Record an ad hoc instance; its verdicts are reported but never counted in a rate."""
     root, conn, loaded = _review_open(workspace, recipe)
     try:
-        keys = _review_call(_resolve_subject_keys, conn, subject)
+        keys = _review_call(_resolve_subject_keys, conn, subject, root)
         instance_id = _review_call(
             review.spot, conn, loaded, check, keys, pointer=pointer, page=page
         )
@@ -935,6 +938,62 @@ def review_report(workspace: ReviewWorkspace = None, as_json: AsJson = False) ->
         typer.echo(json.dumps(rep, indent=2))
     else:
         review.render_report(Console(), rep)
+    raise typer.Exit(EXIT_OK)
+
+
+# --- sources -------------------------------------------------------------------------
+
+sources_app = typer.Typer(
+    no_args_is_help=True,
+    add_completion=False,
+    help="Manage registered workspace sources.",
+)
+app.add_typer(sources_app, name="sources")
+
+
+@sources_app.command("relocate")
+def sources_relocate(
+    old: Annotated[Path, typer.Argument(help="Old folder or prefix path to relocate from.")],
+    new: Annotated[Path, typer.Argument(help="New folder or prefix path to relocate to.")],
+    workspace: Annotated[
+        Path | None,
+        typer.Option(envvar="COMMISSURE_WORKSPACE", help="Workspace directory."),
+    ] = None,
+    dry_run: Annotated[
+        bool,
+        typer.Option("--dry-run", help="Check and report rewrites without modifying state.db."),
+    ] = False,
+    as_json: AsJson = False,
+) -> None:
+    """Rewrite folder source paths at or under <old> to <new>, keeping source ids."""
+    root = _search_root(workspace).resolve()
+    if not root.is_dir():
+        _fail_usage(f"workspace path {root} is not a directory")
+    if not (root / DB_NAME).is_file():
+        _fail_usage(f"{root} has no {DB_NAME}")
+    try:
+        with lock(root):
+            ws = open_workspace(root)
+            try:
+                relocated = relocate_sources(ws, old, new, dry_run=dry_run)
+            finally:
+                ws.close()
+    except WorkspaceLocked as exc:
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(EXIT_LOCKED) from None
+    except (WorkspaceError, ValueError) as exc:
+        _fail_usage(str(exc))
+    report = {
+        "workspace": str(root),
+        "dry_run": dry_run,
+        "relocated": relocated,
+    }
+    if as_json:
+        typer.echo(json.dumps(report, indent=2))
+    else:
+        verb = "would relocate" if dry_run else "relocated"
+        for entry in relocated:
+            typer.echo(f"{verb} source #{entry['id']}: {entry['old_uri']} -> {entry['new_uri']}")
     raise typer.Exit(EXIT_OK)
 
 

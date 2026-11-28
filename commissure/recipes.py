@@ -48,7 +48,7 @@ from commissure.parse import DEFAULT_FOR, PARSERS, extension
 from commissure.records import Diagnostic, Outcome, RecordEnvelope
 from commissure.review import Check, client_summary
 from commissure.runner import Plan, RunContext, Subject, canonical
-from commissure.workspace import Workspace, transaction, utc_now
+from commissure.workspace import Workspace, resolve_source_uri, transaction, utc_now
 
 SUBJECTS = ("item", "group", "run")
 
@@ -609,7 +609,7 @@ def _items(
                     "diagnostics": rec["diagnostics"],
                 }
                 consumed.append(rec["outcome_id"])
-        source_uri = r["source_uri"]
+        source_uri = resolve_source_uri(r["source_uri"], ws.root)
         item = Item(
             key=key,
             item_version_id=r["item_version_id"],

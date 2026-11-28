@@ -3,6 +3,7 @@
 import json
 import os
 import shutil
+from pathlib import Path
 
 from commissure.workspace import hash_file, open_workspace
 
@@ -353,3 +354,369 @@ def test_symlinks_are_not_items(cli, ws_root, source, tmp_path):
     assert report["discovered"] == 4
     probed = json.loads(cli("probe", str(source), "--json").stdout)
     assert probed["summary"]["files"] == 4
+
+
+def test_folder_source_inside_solution_stored_relative_and_survives_move(cli, tmp_path):
+    sol_a = tmp_path / "a" / "demo"
+    assert cli("init", str(sol_a)).exit_code == 0
+    batch_a = sol_a / "intake" / "batch"
+    batch_a.mkdir(parents=True)
+    (batch_a / "one.txt").write_text("hello\n")
+
+    code, first = cli.ingest(sol_a / "workspace", batch_a)
+    assert code == 0, first
+    assert (first["added"], first["unchanged"]) == (1, 0)
+    assert _query(sol_a / "workspace", "SELECT id, uri FROM sources") == [
+        {"id": 1, "uri": "intake/batch"}
+    ]
+
+    sol_b = tmp_path / "b" / "demo"
+    shutil.move(tmp_path / "a", tmp_path / "b")
+    code2, second = cli.ingest(sol_b / "workspace", sol_b / "intake" / "batch")
+    assert code2 == 0, second
+    assert (second["status"], second["added"], second["unchanged"]) == ("noop", 0, 1)
+    assert _query(sol_b / "workspace", "SELECT id, uri FROM sources") == [
+        {"id": 1, "uri": "intake/batch"}
+    ]
+    assert _query(sol_b / "workspace", "SELECT count(*) AS n FROM items")[0]["n"] == 1
+
+    # A source outside the solution folder is still stored as an absolute path.
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "two.txt").write_text("world\n")
+    code3, third = cli.ingest(sol_b / "workspace", outside)
+    assert code3 == 0, third
+    assert _query(sol_b / "workspace", "SELECT id, uri FROM sources ORDER BY id") == [
+        {"id": 1, "uri": "intake/batch"},
+        {"id": 2, "uri": str(outside.resolve())},
+    ]
+
+
+def test_readers_resolve_both_stored_source_forms_to_absolute_paths(cli, tmp_path):
+    sol = tmp_path / "sol"
+    ws_root = sol / "workspace"
+    inside = sol / "intake" / "batch"
+    outside = tmp_path / "outside"
+    inside.mkdir(parents=True)
+    outside.mkdir(parents=True)
+    (inside / "in.html").write_text("<main>inside text</main>\n")
+    (outside / "out.html").write_text("<main>outside text</main>\n")
+
+    recipe_dir = sol / "recipe"
+    recipe_dir.mkdir(parents=True)
+    (recipe_dir / "recipe.py").write_text(
+        "from pydantic import BaseModel, ConfigDict\n"
+        "from commissure.api import Check, Evidence, Interface, Stage\n"
+        "class Out(BaseModel):\n"
+        "    model_config = ConfigDict(extra='forbid')\n"
+        "    source_uri: str\n"
+        "    ev: Evidence\n"
+        "def run(ctx, item):\n"
+        "    return Out(source_uri=item.source.uri, ev=Evidence.span(item, 0, 6, kind='lead'))\n"
+        "STAGES = [\n"
+        "    Stage('check_uri', run, schema=Out, text='default',\n"
+        "          checks=(Check('/source_uri', 'Is source_uri absolute?'),))\n"
+        "]\n"
+        "INTERFACE = Interface(title='Demo', render=lambda v: '<p>ok</p>')\n"
+    )
+
+    assert cli.ingest(ws_root, inside)[0] == 0
+    assert cli.ingest(ws_root, outside)[0] == 0
+    assert _query(ws_root, "SELECT uri FROM sources ORDER BY id") == [
+        {"uri": "intake/batch"},
+        {"uri": str(outside.resolve())},
+    ]
+    assert cli("run", "--step", "parse", "--workspace", str(ws_root)).exit_code == 0
+    assert (
+        cli(
+            "run", "--step", "check_uri", "--workspace", str(ws_root), "--recipe", str(recipe_dir)
+        ).exit_code
+        == 0
+    )
+
+    inside_abs = str(inside.resolve())
+    outside_abs = str(outside.resolve())
+
+    # 1. Recipes receive resolved absolute source.uri for both stored forms.
+    for filename, expected_dir in (("in.html", inside_abs), ("out.html", outside_abs)):
+        insp = json.loads(
+            cli("inspect", "--workspace", str(ws_root), "--subject", filename, "--json").stdout
+        )["workspaces"][0]["subject_detail"]
+        assert insp["records"][0]["payload"]["source_uri"] == expected_dir
+        expected_file = str((Path(expected_dir) / filename).resolve())
+        assert insp["items"][0]["original_path"] == expected_file
+        assert insp["items"][0]["original_status"] == "present"
+        assert insp["evidence"][0]["original_path"] == expected_file
+        assert insp["evidence"][0]["original_status"] == "present"
+
+    # 2. Review (and the review page via review.describe) sees resolved absolute original_path.
+    assert (
+        cli(
+            "review",
+            "sample",
+            "--workspace",
+            str(ws_root),
+            "--recipe",
+            str(recipe_dir),
+            "--check",
+            "check_uri:/source_uri",
+            "--n",
+            "2",
+            "--seed",
+            "1",
+            "--reviewer",
+            "tester",
+        ).exit_code
+        == 0
+    )
+    for inst_id in (1, 2):
+        inst = json.loads(
+            cli(
+                "review",
+                "next",
+                "--workspace",
+                str(ws_root),
+                "--recipe",
+                str(recipe_dir),
+                "--instance",
+                str(inst_id),
+                "--json",
+            ).stdout
+        )["instance"]
+        orig_path = inst["originals"][0]["original_path"]
+        assert Path(orig_path).is_absolute()
+        assert inst["originals"][0]["original_status"] == "present"
+
+    # 3. Serve InterfaceView and review_page see resolved absolute URIs.
+    from commissure.recipes import load_recipe
+    from commissure.serve import InterfaceApp, build_view
+
+    view = build_view(ws_root, load_recipe(recipe_dir), "token")
+    assert [s.uri for s in view.sources] == [inside_abs, outside_abs]
+    ui = InterfaceApp(ws_root, recipe_dir)
+    resp = ui._review.get("/review/instance/1", {}, {})
+    assert resp.status == 200
+    assert "/review/original/" in resp.body.decode("utf-8")
+
+
+def test_sources_relocate_and_ingest_stale_source_warning(cli, tmp_path):
+    from commissure.workspace import transaction
+
+    old_sol = tmp_path / "old" / "demo"
+    old_ws = old_sol / "workspace"
+    old_batch = old_sol / "intake" / "batch"
+    old_ext = tmp_path / "ext_old" / "corpus"
+    old_batch.mkdir(parents=True)
+    old_ext.mkdir(parents=True)
+    (old_batch / "one.html").write_text("<main>alpha beta</main>\n")
+    (old_ext / "two.html").write_text("<main>gamma delta</main>\n")
+
+    recipe_dir = old_sol / "recipe"
+    recipe_dir.mkdir(parents=True)
+    (recipe_dir / "recipe.py").write_text(
+        "from pydantic import BaseModel, ConfigDict\n"
+        "from commissure.api import Check, Evidence, Stage\n"
+        "class Out(BaseModel):\n"
+        "    model_config = ConfigDict(extra='forbid')\n"
+        "    word: str\n"
+        "    ev: Evidence\n"
+        "def extract(ctx, item):\n"
+        "    return Out(word=item.text.split()[0], ev=Evidence.span(item, 0, 5, kind='word'))\n"
+        "STAGES = [\n"
+        "    Stage('extract', extract, schema=Out, text='default',\n"
+        "          checks=(Check('/word', 'Is the first word right?'),))\n"
+        "]\n"
+    )
+
+    assert cli.ingest(old_ws, old_batch)[0] == 0
+    assert cli.ingest(old_ws, old_ext)[0] == 0
+    # Simulate a pre-change workspace where intake/batch was stored as an absolute path.
+    ws = open_workspace(old_ws)
+    with transaction(ws.conn):
+        ws.conn.execute("UPDATE sources SET uri = ? WHERE id = 1", (str(old_batch.resolve()),))
+    ws.close()
+
+    assert cli("run", "--step", "parse", "--workspace", str(old_ws)).exit_code == 0
+    assert (
+        cli(
+            "run", "--step", "extract", "--workspace", str(old_ws), "--recipe", str(recipe_dir)
+        ).exit_code
+        == 0
+    )
+    assert (
+        cli(
+            "review",
+            "sample",
+            "--workspace",
+            str(old_ws),
+            "--recipe",
+            str(recipe_dir),
+            "--check",
+            "extract:/word",
+            "--n",
+            "2",
+            "--seed",
+            "7",
+            "--reviewer",
+            "alice",
+        ).exit_code
+        == 0
+    )
+    assert (
+        cli(
+            "review", "record", "1", "correct", "--workspace", str(old_ws), "--reviewer", "alice"
+        ).exit_code
+        == 0
+    )
+
+    def snapshot_counts(root: Path) -> dict[str, int]:
+        return {
+            table: _query(root, f"SELECT count(*) AS n FROM {table}")[0]["n"]
+            for table in (
+                "sources",
+                "items",
+                "item_versions",
+                "outcomes",
+                "evidence",
+                "review_instances",
+                "verdicts",
+            )
+        }
+
+    before_counts = snapshot_counts(old_ws)
+
+    # Move both the solution folder and the external folder.
+    new_sol = tmp_path / "new" / "demo"
+    new_ws = new_sol / "workspace"
+    new_recipe = new_sol / "recipe"
+    new_ext = tmp_path / "ext_new" / "corpus"
+    shutil.move(tmp_path / "old", tmp_path / "new")
+    shutil.move(tmp_path / "ext_old", tmp_path / "ext_new")
+
+    # Refusal 1: <new> does not exist.
+    r_missing = cli(
+        "sources", "relocate", str(old_sol), str(tmp_path / "missing"), "--workspace", str(new_ws)
+    )
+    assert r_missing.exit_code == 2
+    assert "does not exist" in r_missing.output
+    assert _query(new_ws, "SELECT id, uri FROM sources ORDER BY id") == [
+        {"id": 1, "uri": str(old_batch.resolve())},
+        {"id": 2, "uri": str(old_ext.resolve())},
+    ]
+
+    # Refusal 2: <new> exists, but the rewritten subfolder under it does not exist.
+    empty_dir = tmp_path / "empty_target"
+    empty_dir.mkdir()
+    r_sub_missing = cli(
+        "sources", "relocate", str(old_sol), str(empty_dir), "--workspace", str(new_ws)
+    )
+    assert r_sub_missing.exit_code == 2
+    assert "intake/batch" in r_sub_missing.output and "does not exist" in r_sub_missing.output
+    assert _query(new_ws, "SELECT id, uri FROM sources ORDER BY id") == [
+        {"id": 1, "uri": str(old_batch.resolve())},
+        {"id": 2, "uri": str(old_ext.resolve())},
+    ]
+
+    # --dry-run writes nothing.
+    r_dry = cli(
+        "sources",
+        "relocate",
+        str(old_sol),
+        str(new_sol),
+        "--workspace",
+        str(new_ws),
+        "--dry-run",
+        "--json",
+    )
+    assert r_dry.exit_code == 0, r_dry.output
+    dry_report = json.loads(r_dry.stdout)
+    assert dry_report["dry_run"] is True
+    assert dry_report["relocated"] == [
+        {"id": 1, "old_uri": str(old_batch.resolve()), "new_uri": "intake/batch"}
+    ]
+    assert _query(new_ws, "SELECT id, uri FROM sources ORDER BY id") == [
+        {"id": 1, "uri": str(old_batch.resolve())},
+        {"id": 2, "uri": str(old_ext.resolve())},
+    ]
+
+    # Relocate the solution folder (stored relative) and the external source (stored absolute).
+    r_sol = cli(
+        "sources", "relocate", str(old_sol), str(new_sol), "--workspace", str(new_ws), "--json"
+    )
+    assert r_sol.exit_code == 0, r_sol.output
+    r_ext = cli(
+        "sources",
+        "relocate",
+        str(tmp_path / "ext_old"),
+        str(tmp_path / "ext_new"),
+        "--workspace",
+        str(new_ws),
+        "--json",
+    )
+    assert r_ext.exit_code == 0, r_ext.output
+    assert _query(new_ws, "SELECT id, uri FROM sources ORDER BY id") == [
+        {"id": 1, "uri": "intake/batch"},
+        {"id": 2, "uri": str(new_ext.resolve())},
+    ]
+    assert snapshot_counts(new_ws) == before_counts
+
+    # Every stage is fresh after relocation (relocation is not an input change).
+    assert cli.ingest(new_ws, new_sol / "intake" / "batch")[1]["status"] == "noop"
+    assert cli.ingest(new_ws, new_ext)[1]["status"] == "noop"
+    p_res = cli("run", "--step", "parse", "--workspace", str(new_ws), "--json")
+    assert p_res.exit_code == 0 and json.loads(p_res.stdout)["status"] == "noop"
+    insp = json.loads(cli("inspect", "--workspace", str(new_ws), "--json").stdout)["workspaces"][0]
+    for row in insp["outcomes"]:
+        assert (
+            row["version_stale"],
+            row["code_stale"],
+            row["params_stale"],
+            row["input_stale"],
+        ) == (0, 0, 0, 0)
+    checks_out = json.loads(
+        cli(
+            "review",
+            "checks",
+            "--workspace",
+            str(new_ws),
+            "--recipe",
+            str(new_recipe),
+            "--json",
+        ).stdout
+    )["checks"]
+    extract_check = next(c for c in checks_out if c["id"] == "extract:/word")
+    assert extract_check["population"] == 2 and extract_check.get("unavailable") is None
+
+    # Now test stale-source warning on ingest and collision refusal on relocate:
+    # Move new_ext to ext_v3, and ingest ext_v3 BEFORE running relocate.
+    ext_v3 = tmp_path / "ext_v3" / "corpus"
+    shutil.move(tmp_path / "ext_new", tmp_path / "ext_v3")
+    ing_dup = cli(
+        "run", "--step", "ingest", "--workspace", str(new_ws), "--source", str(ext_v3), "--json"
+    )
+    assert ing_dup.exit_code == 0, ing_dup.output
+    # Should have warned on stderr naming `commissure sources relocate`.
+    assert "commissure sources relocate" in ing_dup.output
+
+    # Now trying to relocate ext_new -> ext_v3 collides with source #3; refuses and names both
+    # sources with their item, outcome, and verdict-instance counts.
+    r_collide = cli(
+        "sources",
+        "relocate",
+        str(tmp_path / "ext_new"),
+        str(tmp_path / "ext_v3"),
+        "--workspace",
+        str(new_ws),
+    )
+    assert r_collide.exit_code != 0
+    assert str(new_ext.resolve()) in r_collide.output
+    assert str(ext_v3.resolve()) in r_collide.output
+    assert "1 item" in r_collide.output
+    assert "outcome" in r_collide.output
+    assert "verdict" in r_collide.output
+    # Nothing was written by the refused relocate.
+    assert _query(new_ws, "SELECT id, uri FROM sources ORDER BY id") == [
+        {"id": 1, "uri": "intake/batch"},
+        {"id": 2, "uri": str(new_ext.resolve())},
+        {"id": 3, "uri": str(ext_v3.resolve())},
+    ]

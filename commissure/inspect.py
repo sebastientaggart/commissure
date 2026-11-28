@@ -18,7 +18,14 @@ from rich.console import Console
 from rich.markup import escape
 from rich.table import Table
 
-from commissure.workspace import BLOBS_DIR, DB_NAME, MIGRATIONS, BlobStore, WorkspaceError
+from commissure.workspace import (
+    BLOBS_DIR,
+    DB_NAME,
+    MIGRATIONS,
+    BlobStore,
+    WorkspaceError,
+    resolve_source_uri,
+)
 
 # Columns a run may leave NULL. NULL means "this step does not measure it".
 SIGNALS = (
@@ -136,7 +143,9 @@ def inspect_workspace(
         if run is None and call is not None and call_detail is not None:
             target_run_id = call_detail["run_id"]
         has_run_scope = run is not None or (call is not None and call_detail is not None)
-        subject_keys = _resolve_subject_keys(conn, subject) if subject is not None else None
+        subject_keys = (
+            _resolve_subject_keys(conn, subject, root=root) if subject is not None else None
+        )
         subject_runs = _subject_run_ids(conn, subject_keys) if subject_keys is not None else None
 
         runs = [
@@ -714,7 +723,9 @@ def _resolve_run_selector(
 _AMBIGUOUS_SHOWN = 20  # matches listed in the error; the rest are counted, never dropped silently
 
 
-def _resolve_subject_keys(conn: sqlite3.Connection, subject: str) -> set[str]:
+def _resolve_subject_keys(
+    conn: sqlite3.Connection, subject: str, root: Path | None = None
+) -> set[str]:
     """Subject keys for `subject`; a usage error when nothing or more than one item matches.
 
     A bare name may be a group key, an item id, or a locator. An exact locator wins; a
@@ -741,7 +752,9 @@ def _resolve_subject_keys(conn: sqlite3.Connection, subject: str) -> set[str]:
             ).fetchall()
         if len(matches) > 1:
             shown = "\n".join(
-                f"  item:{r['id']}  {r['uri']}/{r['locator']}" for r in matches[:_AMBIGUOUS_SHOWN]
+                f"  item:{r['id']}  "
+                f"{resolve_source_uri(r['uri'], root) if root else r['uri']}/{r['locator']}"
+                for r in matches[:_AMBIGUOUS_SHOWN]
             )
             more = len(matches) - _AMBIGUOUS_SHOWN
             raise ValueError(
@@ -791,7 +804,7 @@ def _subject_detail(conn: sqlite3.Connection, root: Path, keys: set[str]) -> dic
         "keys": sorted(keys),
         "items": [_item_detail(conn, blobs, v) for v in _subject_item_versions(conn, keys)],
         "records": _subject_records(conn, keys),
-        "evidence": _subject_evidence(conn, keys),
+        "evidence": _subject_evidence(conn, keys, root=root),
     }
 
 
@@ -799,7 +812,11 @@ _CONTEXT_CHARS = 80  # text shown on each side of a span
 
 
 def _subject_evidence(
-    conn: sqlite3.Connection, keys: set[str], *, under: str | None = None
+    conn: sqlite3.Connection,
+    keys: set[str],
+    *,
+    root: Path | None = None,
+    under: str | None = None,
 ) -> list[dict[str, Any]]:
     """The subject's current evidence (`evidence_review`), ready to check against the original.
 
@@ -843,7 +860,10 @@ def _subject_evidence(
     statuses: dict[str, tuple[str | None, str | None]] = {}
     out = []
     for r in rows:
-        original = Path(r["source_uri"]) / r["locator"]
+        source_uri = (
+            resolve_source_uri(r["source_uri"], root) if root is not None else r["source_uri"]
+        )
+        original = Path(source_uri) / r["locator"]
         if str(original) not in statuses:
             status = _original_status(original, r["size_bytes"])
             statuses[str(original)] = (status, original.as_uri() if status == "present" else None)
@@ -934,8 +954,14 @@ def _item_detail(
         (version_id,),
     ).fetchone()
     detail = dict(row)
+    if row["source_kind"] == "folder":
+        detail["source_uri"] = resolve_source_uri(
+            row["source_uri"], blobs.root.parent, row["source_kind"]
+        )
     detail["key"] = f"item:{row['item_id']}"
-    original = Path(row["source_uri"]) / row["locator"] if row["source_kind"] == "folder" else None
+    original = (
+        Path(detail["source_uri"]) / row["locator"] if row["source_kind"] == "folder" else None
+    )
     detail["original_path"] = str(original) if original is not None else None
     detail["original_status"] = _original_status(original, row["size_bytes"])
     blob = blobs.path_for(row["bytes_hash"]) if row["bytes_hash"] else None
