@@ -1,8 +1,9 @@
 """Command line interface.
 
-Commands (in `solutions/<name>/`, `--recipe` and `--workspace` default to `recipe/`, `workspace/`):
+Commands (in a solution folder, `--recipe` and `--workspace` default to `recipe/`, `workspace/`):
 
-    commissure init solutions/<name> [--json]
+    commissure new <dir> [--name NAME] [--example] [--json]
+    commissure agent-kit [<dir>] [--json]
     commissure probe <path> [--json]
     commissure run --step ingest --source <dir> --role <role> [--workspace W] [--json]
     commissure run --step parse [--parser default|ocr|...] [--workspace W] [--limit N] [--json]
@@ -15,12 +16,6 @@ Commands (in `solutions/<name>/`, `--recipe` and `--workspace` default to `recip
     commissure sources relocate <old> <new> [--workspace W] [--dry-run] [--json]
     commissure sources retire <source-id> [--workspace W] [--dry-run] [--json]
     commissure serve [--recipe R] [--workspace W] [--host 127.0.0.1] [--port 8000]
-    commissure release build <target> [--skip-tests] [--offline] [--allow-dirty] [--json]
-    commissure release publish <target> [--tarball] [--push] [--json]
-    commissure dev clone <solution-remote> <dir> [--rev SHA] [--core-url URL] [--name NAME]
-    commissure dev new <dir> --name <name> [--remote URL] [--rev SHA] [--core-url URL]
-    commissure dev repin <full-sha>    (inside a wrapper)
-    commissure dev refresh             (inside a wrapper)
 
 Exit codes are deterministic so OS schedulers can act on them:
 
@@ -74,10 +69,10 @@ from commissure.recon import DEFAULT_TEXT as RECON_DEFAULT_TEXT
 from commissure.recon import recon_workspace
 from commissure.recon import render as render_recon
 from commissure.runner import reap_abandoned, run_plan
-from commissure.scaffold import ScaffoldError, scaffold_solution
+from commissure.scaffold import KIT_DIR, ScaffoldError, kit_skills, scaffold_solution, write_kit
 from commissure.search import DEFAULT_LIMIT, SearchUsageError, search
 from commissure.serve import InterfaceApp, make_server
-from commissure.tools import licenses, release, wrapper
+from commissure.tools import licenses
 from commissure.workspace import (
     DB_NAME,
     MIGRATIONS,
@@ -665,22 +660,26 @@ def run(
 
 
 @app.command()
-def init(
+def new(
     path: Annotated[
         Path,
         typer.Argument(
-            help="Solution directory to create. May already exist, but must hold no scaffold files."
+            help="Solution folder to create. May already exist, but must hold no scaffold files."
         ),
     ],
     name: Annotated[
         str | None,
-        typer.Option(help="Solution name used in the files; defaults to the folder name."),
+        typer.Option(help="Solution (project) name; defaults to the folder name."),
     ] = None,
+    example: Annotated[
+        bool,
+        typer.Option("--example", help="A working example solution with a small corpus."),
+    ] = False,
     as_json: Annotated[bool, typer.Option("--json", help="Machine-readable output.")] = False,
 ) -> None:
-    """Create a solution directory from the built-in template. Creates no workspace."""
+    """Create a solution project from the built-in template. Runs no git, uv, or workspace."""
     try:
-        written = scaffold_solution(path, name)
+        written = scaffold_solution(path, name, "example" if example else "project")
     except ScaffoldError as exc:
         _fail_usage(str(exc))
     report = {
@@ -692,10 +691,28 @@ def init(
         typer.echo(json.dumps(report, indent=2))
     else:
         typer.echo(f"created solution {report['name']} in {report['solution']}")
-        for rel in report["created"]:
-            typer.echo(f"  {rel}")
+        typer.echo(f"next: cd {path} && git init && uv sync, then see README.md")
+    raise typer.Exit(EXIT_OK)
+
+
+@app.command("agent-kit")
+def agent_kit(
+    path: Annotated[Path, typer.Argument(help="Solution folder.")] = Path("."),
+    as_json: Annotated[bool, typer.Option("--json", help="Machine-readable output.")] = False,
+) -> None:
+    """Replace the solution's agent kit (.agents/commissure/) with the installed version's."""
+    if not (path / "recipe" / "recipe.py").is_file():
+        _fail_usage(f"{path.resolve()} has no recipe/recipe.py: not a solution folder")
+    try:
+        written = write_kit(path)
+    except ScaffoldError as exc:
+        _fail_usage(str(exc))
+    report = {"solution": str(path.resolve()), "written": [p.as_posix() for p in written]}
+    if as_json:
+        typer.echo(json.dumps(report, indent=2))
+    else:
         typer.echo(
-            "next: add intake/<batch>/ and fill docs/notes.md, then investigate (see README.md)"
+            f"wrote {KIT_DIR}/ and {len(kit_skills())} skill link(s) in {report['solution']}"
         )
     raise typer.Exit(EXIT_OK)
 
@@ -1052,171 +1069,6 @@ def sources_retire(
             f"{c['verdict_instances']} verdict instance(s), {c['verdicts']} verdict(s) in lineage; "
             f"{out['note']})"
         )
-    raise typer.Exit(EXIT_OK)
-
-
-# --- release -------------------------------------------------------------------------
-
-release_app = typer.Typer(
-    no_args_is_help=True,
-    add_completion=False,
-    help="Build and publish single-solution client releases.",
-)
-app.add_typer(release_app, name="release")
-
-
-@release_app.command("build")
-def release_build(
-    target: Annotated[str, typer.Argument(help="Target name, or <solution>/<target>.")],
-    skip_tests: Annotated[
-        bool, typer.Option("--skip-tests", help="Skip running pytest before building.")
-    ] = False,
-    offline: Annotated[
-        bool, typer.Option("--offline", help="Lock from the uv cache only.")
-    ] = False,
-    allow_dirty: Annotated[
-        bool, typer.Option("--allow-dirty", help="Release uncommitted changes.")
-    ] = False,
-    as_json: AsJson = False,
-) -> None:
-    """Build the release of a target into build/releases/<target>/."""
-    root, default_sol = release.resolve_root()
-    spec = f"{default_sol}/{target}" if default_sol and "/" not in target else target
-    try:
-        dest, version = release.build(
-            root,
-            spec,
-            run_tests=not skip_tests,
-            offline=offline,
-            allow_dirty=allow_dirty,
-        )
-    except release.ReleaseError as exc:
-        typer.echo(f"release: {exc}", err=True)
-        raise typer.Exit(EXIT_FAILED) from None
-    if as_json:
-        typer.echo(json.dumps({"target": target, "version": version, "dest": str(dest)}, indent=2))
-    else:
-        typer.echo(f"built {target} v{version} in {dest}")
-    raise typer.Exit(EXIT_OK)
-
-
-@release_app.command("publish")
-def release_publish(
-    target: Annotated[str, typer.Argument(help="Target name, or <solution>/<target>.")],
-    tarball: Annotated[
-        bool,
-        typer.Option(
-            "--tarball", help="Write solutions/<solution>/releases/<target>-v<version>.tar.gz."
-        ),
-    ] = False,
-    push: Annotated[
-        bool, typer.Option("--push", help="Push the built release to the target's remote.")
-    ] = False,
-    as_json: AsJson = False,
-) -> None:
-    """Publish the latest built release of a target."""
-    root, default_sol = release.resolve_root()
-    spec = f"{default_sol}/{target}" if default_sol and "/" not in target else target
-    try:
-        done = release.publish(root, spec, tarball=tarball, push=push)
-    except release.ReleaseError as exc:
-        typer.echo(f"release: {exc}", err=True)
-        raise typer.Exit(EXIT_FAILED) from None
-    if as_json:
-        typer.echo(json.dumps({"target": target, "published": done}, indent=2))
-    else:
-        for line in done:
-            typer.echo(line)
-    raise typer.Exit(EXIT_OK)
-
-
-# --- dev (wrappers) ------------------------------------------------------------------
-
-dev_app = typer.Typer(
-    no_args_is_help=True,
-    add_completion=False,
-    help="Develop one solution outside core's repository, in a wrapper pinned to a core commit.",
-)
-app.add_typer(dev_app, name="dev")
-
-RevOpt = Annotated[
-    str | None,
-    typer.Option("--rev", help="Full core commit to pin; default: the running commissure's."),
-]
-CoreUrlOpt = Annotated[
-    str | None,
-    typer.Option(
-        "--core-url",
-        help="Core git URL; default: where the running commissure came from, else the public "
-        "repository. A file:// URL pins a local checkout (committed work only).",
-    ),
-]
-
-
-def _dev(fn, *args, **kwargs):
-    try:
-        return fn(*args, **kwargs)
-    except wrapper.UsageError as exc:
-        typer.echo(f"dev: {exc}", err=True)
-        raise typer.Exit(EXIT_USAGE) from None
-    except wrapper.WrapperError as exc:
-        typer.echo(f"dev: {exc}", err=True)
-        raise typer.Exit(EXIT_FAILED) from None
-
-
-@dev_app.command("clone")
-def dev_clone(
-    remote: Annotated[str, typer.Argument(help="The solution's git remote.")],
-    dest: Annotated[Path, typer.Argument(help="Wrapper folder to create (absent or empty).")],
-    rev: RevOpt = None,
-    core_url: CoreUrlOpt = None,
-    name: Annotated[
-        str | None, typer.Option(help="Solution name; default: the remote's last path part.")
-    ] = None,
-) -> None:
-    """Clone a solution into <dir>/solutions/<name>/ and generate a wrapper around it."""
-    out = _dev(wrapper.clone, remote, dest, rev=rev, core_url=core_url, name=name)
-    typer.echo(f"created {out}; next: cd {dest} && uv run pytest")
-    raise typer.Exit(EXIT_OK)
-
-
-@dev_app.command("new")
-def dev_new(
-    dest: Annotated[Path, typer.Argument(help="Wrapper folder to create (absent or empty).")],
-    name: Annotated[str, typer.Option(help="Solution name.")],
-    remote: Annotated[
-        str | None,
-        typer.Option(help="An empty git remote: the first commit is pushed there."),
-    ] = None,
-    rev: RevOpt = None,
-    core_url: CoreUrlOpt = None,
-) -> None:
-    """Scaffold a new solution (commissure init), commit it, and wrap it."""
-    out = _dev(wrapper.new, dest, name, rev=rev, core_url=core_url, remote=remote)
-    pushed = f", pushed to {remote}" if remote else ""
-    typer.echo(f"created {out} with solutions/{name}/ (one commit{pushed})")
-    raise typer.Exit(EXIT_OK)
-
-
-@dev_app.command("repin")
-def dev_repin(
-    sha: Annotated[str, typer.Argument(help="Full 40-character core commit.")],
-    skip_tests: Annotated[
-        bool, typer.Option("--skip-tests", help="Don't run the solution's tests afterwards.")
-    ] = False,
-) -> None:
-    """Move this wrapper's core pin; print core's CHANGELOG.md additions; run the tests."""
-    root = _dev(wrapper.find_wrapper)
-    result = _dev(wrapper.repin, root, sha, run_tests=not skip_tests, echo=typer.echo)
-    raise typer.Exit(EXIT_FAILED if result.tests else EXIT_OK)
-
-
-@dev_app.command("refresh")
-def dev_refresh() -> None:
-    """Regenerate this wrapper's generated files, keeping the pin and solutions/."""
-    root = _dev(wrapper.find_wrapper)
-    _dev(wrapper.refresh, root)
-    typer.echo(f"refreshed {root}")
     raise typer.Exit(EXIT_OK)
 
 

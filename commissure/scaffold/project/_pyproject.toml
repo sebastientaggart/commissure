@@ -1,0 +1,27 @@
+[project]
+name = "__SOLUTION_NAME__"
+version = "0.1.0"
+description = "__DESCRIPTION__"
+requires-python = ">=3.12"
+# Patch upgrades only: a new minor version of commissure may change the recipe API. Upgrade with
+# `uv lock --upgrade-package commissure` after reading its CHANGELOG's **Upgrading** entries.
+dependencies = ["__COMMISSURE_REQUIREMENT__"]
+
+[tool.uv]
+package = false
+
+[dependency-groups]
+dev = ["pytest>=9.1.1", "ruff>=0.17.2"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-ra --strict-markers"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = ["*.md", ".agents"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM"]

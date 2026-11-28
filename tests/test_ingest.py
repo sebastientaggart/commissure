@@ -358,7 +358,7 @@ def test_symlinks_are_not_items(cli, ws_root, source, tmp_path):
 
 def test_folder_source_inside_solution_stored_relative_and_survives_move(cli, tmp_path):
     sol_a = tmp_path / "a" / "demo"
-    assert cli("init", str(sol_a)).exit_code == 0
+    assert cli("new", str(sol_a)).exit_code == 0
     batch_a = sol_a / "intake" / "batch"
     batch_a.mkdir(parents=True)
     (batch_a / "one.txt").write_text("hello\n")
@@ -935,7 +935,7 @@ def test_unmoved_absolute_source_from_older_workspace_is_adopted_not_duplicated(
     # absolute path. The next ingest must reuse that source (rewritten to the relative form),
     # not register a second one and re-add every item.
     sol = tmp_path / "demo"
-    assert cli("init", str(sol)).exit_code == 0
+    assert cli("new", str(sol)).exit_code == 0
     batch = sol / "intake" / "batch"
     batch.mkdir(parents=True)
     (batch / "one.txt").write_text("hello\n")
