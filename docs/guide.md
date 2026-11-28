@@ -110,6 +110,54 @@ STAGES = [
 ]
 ```
 
+### HTML Deliverables & Charts (`render_page`)
+
+Deliverable stages render body fragments through `render_page` ([`commissure/deliver/html.py`](../commissure/deliver/html.py)), which wraps them in the shared offline shell (`pico.min.css`, [`report.css`](../commissure/deliver/static/report.css), [`report.js`](../commissure/deliver/static/report.js), and optional `recipe/brand/brand.css`).
+
+`report.css` provides `:root` chart tokens (overridable in `recipe/brand/brand.css`) and zero-JS HTML chart primitives so recipes never hard-code hex values or repurpose `--status-*` tokens as data series:
+
+- **Tokens:** `--chart-cat-1` to `--chart-cat-8` (OKLCH- and color-blind-validated categorical palette; leading 7 slots pass all-pairs separation) plus `--chart-cat-rest`, `--chart-series` (`var(--brand-primary)`), `--chart-seq-1` to `--chart-seq-5`, `--chart-div-neg` / `--chart-div-mid` / `--chart-div-pos`, `--chart-wash`, `--chart-band`, `--chart-grid`, `--chart-axis-ink`, `--chart-label-on-dark`, and `--chart-label-on-light`.
+- **HTML primitives (no JavaScript required):**
+  - 100% segmented bar and legend:
+    ```html
+    <div class="chart-segbar" role="img" aria-label="Category split">
+      <span class="chart-seg chart-on-dark" style="flex-grow: 48; background: var(--chart-cat-1);">48%</span>
+      <span class="chart-seg chart-on-light" style="flex-grow: 22; background: var(--chart-cat-2);">22%</span>
+      <span class="chart-seg chart-on-dark" style="flex-grow: 18; background: var(--chart-cat-3);">18%</span>
+      <span class="chart-seg chart-on-light" style="flex-grow: 12; background: var(--chart-cat-4);">12%</span>
+    </div>
+    <ul class="chart-legend">
+      <li><span class="chart-swatch" style="background: var(--chart-cat-1);"></span>Category A</li>
+      <li><span class="chart-swatch" style="background: var(--chart-cat-2);"></span>Category B</li>
+      <li><span class="chart-swatch" style="background: var(--chart-cat-3);"></span>Category C</li>
+      <li><span class="chart-swatch" style="background: var(--chart-cat-4);"></span>Category D</li>
+    </ul>
+    ```
+  - Ranked horizontal bar list: `.chart-bars > li` containing `.chart-bar-label`, `.chart-bar-track > .chart-bar`, and `.chart-bar-value`.
+- **Chart.js defaults (`scripts=("chart.umd.min.js",)`):** Passing `"chart.umd.min.js"` to `render_page` automatically includes [`charts.js`](../commissure/deliver/static/charts.js) right after it. `charts.js` reads `:root` tokens, sets `Chart.defaults` (page font, axis/grid ink, animation off, `index` hover tooltips without color boxes on single-series charts, 24px bar thickness cap with 4px top radius, 2px round-joined lines), colors datasets from `--chart-series` or `--chart-cat-*` (keyed by `dataset.key` via `CommissureCharts.colorFor(key, keys)`), and registers `CommissureCharts.capLabels` and `CommissureCharts.referenceLines`:
+  ```html
+  <div class="chart-canvas"><canvas id="daily-counts"></canvas></div>
+  <div class="chart-canvas"><canvas id="cumulative-share"></canvas></div>
+  <script>
+    new Chart(document.getElementById("daily-counts"), {
+      type: "bar",
+      data: { labels: days, datasets: [{ label: "Count", data: counts }] },
+      options: { maintainAspectRatio: false, plugins: { legend: { display: false }, capLabels: true } }
+    });
+    new Chart(document.getElementById("cumulative-share"), {
+      type: "line",
+      data: { labels: days, datasets: [{ label: "Share", data: shares, fill: "origin" }] },
+      options: {
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          referenceLines: { bands: [{ start: "2026-05-01", end: "2026-05-15", label: "Closes May 15" }] }
+        }
+      }
+    });
+  </script>
+  ```
+
 ---
 
 ## 3. CLI Workflow & Reference

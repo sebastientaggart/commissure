@@ -116,7 +116,13 @@ record describing the files. It is not an interface.
 - Read the header comment and `:root` tokens at the top of
   `commissure/deliver/static/report.css` first. Do not override core desktop typography or
   sticky header controls. Page-local `<style>` may add layout classes when no primitive
-  fits; tokens only—no hard-coded color palettes—and say so in the report.
+  fits; tokens only—no hard-coded color palettes, and never reuse `--status-*` tokens as
+  chart series colors—and say so in the report.
+- For charts, use `--chart-*` tokens, the HTML primitives (`.chart-segbar > .chart-seg`,
+  `.chart-on-dark`, `.chart-on-light`, `.chart-legend > li > .chart-swatch`, `.chart-bars`,
+  `.chart-canvas`), and `render_page(..., scripts=("chart.umd.min.js",))`, which auto-loads
+  `static/charts.js` (`Chart.defaults` and `window.CommissureCharts`: `color`, `colorFor`,
+  `capLabels`, `referenceLines`).
 - Form labels and `.field-hint` above `.form-row`; table filters in `.section-toolbar`
   (details in the `report.css` header). Concise `thead th` labels.
 - Branding only in `recipe/brand/{brand.css,header.html,footer.html,logo.svg}`. List brand

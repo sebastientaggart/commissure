@@ -11,6 +11,7 @@ from commissure.api import (
     page_external_resource_count,
     render_page,
 )
+from commissure.deliver.html import check_chart_palette, check_chart_sequential_ramp
 
 ANCHOR = '<a class="site-name" href="https://example.org/"><span>Acme</span></a>'
 CDN = '<link rel="stylesheet" href="https://cdn.example.com/pico.min.css">'
@@ -64,6 +65,7 @@ def test_brand_fragment_is_inserted_unescaped_and_body_is_escaped(tmp_path: Path
     assert (out / "static" / "pico.min.css").is_file()
     assert (out / "static" / "licenses" / "pico.LICENSE.md").is_file()
     assert not (out / "static" / "chart.umd.min.js").exists()
+    assert not (out / "static" / "charts.js").exists()
     assert not (out / "static" / "licenses" / "chartjs.LICENSE.md").exists()
     assert not (out / "static" / "brand" / "header.html").exists()
 
@@ -140,7 +142,10 @@ def test_chart_js_is_copied_only_when_requested(tmp_path: Path) -> None:
     out = tmp_path / "out"
     html = _page(tmp_path, None, scripts=("chart.umd.min.js",), outputs_dir=out)
     assert 'src="static/chart.umd.min.js"' in html
+    assert 'src="static/charts.js"' in html
+    assert html.index('src="static/chart.umd.min.js"') < html.index('src="static/charts.js"')
     assert (out / "static" / "chart.umd.min.js").is_file()
+    assert (out / "static" / "charts.js").is_file()
     assert (out / "static" / "licenses" / "chartjs.LICENSE.md").is_file()
     assert (out / "static" / "report.js").is_file()
 
@@ -331,3 +336,127 @@ def test_external_links_open_in_new_tab_while_internal_links_stay_in_place(tmp_p
         Path(__file__).resolve().parents[1] / "commissure" / "deliver" / "static" / "report.js"
     ).read_text(encoding="utf-8")
     assert 'a[href^="http://"], a[href^="https://"], a[href^="//"]' in report_js
+
+
+def test_chart_palette_tokens_cvd_separation_and_charts_js_contract() -> None:
+    """Verify report.css chart tokens pass OKLCH/CVD/contrast gates and prove each check fails."""
+    import re
+
+    static_dir = Path(__file__).resolve().parents[1] / "commissure" / "deliver" / "static"
+    report_css = (static_dir / "report.css").read_text(encoding="utf-8")
+    charts_js = (static_dir / "charts.js").read_text(encoding="utf-8")
+    assert count_external_resource_urls(charts_js) == 0
+
+    root_match = re.search(r":root\s*\{([^}]*)\}", report_css)
+    assert root_match is not None
+    root_block = root_match.group(1)
+    hex_tokens = {
+        m.group(1): m.group(2)
+        for m in re.finditer(r"(--[a-z0-9-]+)\s*:\s*(#[0-9a-fA-F]{3,6})\s*;", root_block)
+    }
+    raw_tokens = {
+        m.group(1): m.group(2).strip()
+        for m in re.finditer(r"(--[a-z0-9-]+)\s*:\s*([^;]+);", root_block)
+    }
+
+    categorical = [hex_tokens[f"--chart-cat-{i}"] for i in range(1, 9)]
+    status_colors = [
+        hex_tokens["--status-ok-accent"],
+        hex_tokens["--status-warn-accent"],
+        hex_tokens["--status-err-accent"],
+        hex_tokens["--status-ok-fg"],
+        hex_tokens["--status-warn-fg"],
+        hex_tokens["--status-err-fg"],
+    ]
+    label_on_dark = hex_tokens["--chart-label-on-dark"]
+    label_on_light = hex_tokens["--brand-ink"]
+
+    assert (
+        check_chart_palette(
+            categorical,
+            label_on_dark=label_on_dark,
+            label_on_light=label_on_light,
+            status_colors=status_colors,
+            all_pairs_leading=7,
+        )
+        == []
+    )
+
+    # Neutral remainder and diverging tokens also meet in-fill label contrast (>= 4.5:1).
+    for tok in ("--chart-cat-rest", "--chart-div-neg", "--chart-div-mid", "--chart-div-pos"):
+        c = hex_tokens[tok]
+        assert (
+            max(_wcag_contrast_ratio(c, label_on_dark), _wcag_contrast_ratio(c, label_on_light))
+            >= 4.5
+        )
+
+    # Sequential ramp is monotonic in OKLCH lightness and readable at every step.
+    seq_ramp = [hex_tokens[f"--chart-seq-{i}"] for i in range(1, 6)]
+    assert (
+        check_chart_sequential_ramp(
+            seq_ramp,
+            label_on_dark=label_on_dark,
+            label_on_light=label_on_light,
+        )
+        == []
+    )
+
+    # Semantic tokens and print preservation exist in report.css.
+    assert raw_tokens["--chart-series"] == "var(--brand-primary)"
+    assert raw_tokens["--chart-grid"] == "var(--brand-line)"
+    assert raw_tokens["--chart-axis-ink"] == "var(--brand-ink-soft)"
+    assert raw_tokens["--chart-label-on-light"] == "var(--brand-ink)"
+    assert "color-mix" not in raw_tokens["--chart-wash"]
+    assert "color-mix" not in raw_tokens["--chart-band"]
+    assert re.search(
+        r"@media print\s*\{[\s\S]*?\.chart-seg[\s\S]*?print-color-adjust:\s*exact;", report_css
+    )
+
+    # Prove every check in check_chart_palette and check_chart_sequential_ramp can fail:
+    # 1. Lightness out of [0.43, 0.77]
+    too_light = ["#f2f6fa", *categorical[1:]]
+    assert any("OKLCH L=" in e for e in check_chart_palette(too_light))
+    # 2. Chroma below 0.10
+    too_gray = ["#70757a", *categorical[1:]]
+    assert any("OKLCH C=" in e for e in check_chart_palette(too_gray))
+    # 3. Adjacent pair too close in normal vision
+    dup_adjacent = [categorical[0], "#0a63a8", *categorical[2:]]
+    assert any(
+        "adjacent slots (1, 2)" in e and "normal" in e for e in check_chart_palette(dup_adjacent)
+    )
+    # 4. Red/green pair distinct in normal vision (dE*100 > 24) but confused in deuteranopia (< 8)
+    cvd_trap = ["#a84c24", "#486a18", *categorical[2:]]
+    cvd_errs = check_chart_palette(cvd_trap)
+    assert not any("adjacent slots (1, 2)" in e and "normal" in e for e in cvd_errs)
+    assert any("adjacent slots (1, 2)" in e and "deuteranopia" in e for e in cvd_errs)
+    # 5. All-pairs check catches non-adjacent duplicates among leading slots
+    non_adj_dup = [categorical[0], categorical[1], categorical[0], categorical[3]]
+    assert any(
+        "all-pairs(1..4) slots (1, 3)" in e
+        for e in check_chart_palette(non_adj_dup, all_pairs_leading=4)
+    )
+    # 6. Status-color collision (reusing --status-err-accent #b50909 as a series color)
+    status_reuse = ["#b50909", *categorical[1:]]
+    assert any(
+        "too close to status color #b50909" in e
+        for e in check_chart_palette(status_reuse, status_colors=status_colors)
+    )
+    # 7. Non-monotonic sequential ramp fails check_chart_sequential_ramp
+    bad_seq = [seq_ramp[0], seq_ramp[2], seq_ramp[1], seq_ramp[3], seq_ramp[4]]
+    assert any("lightness drop" in e for e in check_chart_sequential_ramp(bad_seq))
+
+    # charts.js contract: reads :root tokens, sets Chart.defaults, exposes CommissureCharts.
+    for symbol in (
+        "window.CommissureCharts",
+        "color:",
+        "colorFor:",
+        "capLabels:",
+        "referenceLines:",
+        "--chart-cat-",
+        "--chart-series",
+        "--chart-wash",
+        "--chart-band",
+        "d.animation = false",
+        "maxBarThickness = 24",
+    ):
+        assert symbol in charts_js, symbol

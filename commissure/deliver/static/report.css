@@ -1,5 +1,5 @@
 /* First-party page chrome for `render_page` deliverables and `Interface` (`commissure serve`).
- * Loaded after `pico.min.css`; override `--brand-*` on `:root` in `recipe/brand/brand.css`.
+ * Loaded after `pico.min.css`; override `--brand-*` and `--chart-*` on `:root` in `recipe/brand/brand.css`.
  *
  * Ready-made body-fragment primitives (reuse instead of page-local `<style>` themes):
  * - Summary strip: `.kpis > .kpi` (`<strong>123</strong> Label`)
@@ -10,6 +10,9 @@
  *   `.form-row` containing `.field-grow` (`<input>` + `.field-error`) and `<button>` + `.run-busy-msg`
  * - Section header + inline filter: `.section-toolbar` (`<h2>` + `<search><label class="toolbar-filter-label"><span>Filter</span><input type="search" data-filter="#id"></label></search>`)
  * - Tables & row actions: `.table-wrap > table[data-sortable]`, `.table-tools`, `.inline-actions`, `.btn-link`, `.btn-compact`
+ * - Charts (HTML & Chart.js): `.chart-canvas`, `.chart-canvas-tall`, `.chart-segbar > .chart-seg`,
+ *   `.chart-on-dark`, `.chart-on-light`, `.chart-legend > li > .chart-swatch`,
+ *   `.chart-bars` (`.chart-bar-label`, `.chart-bar-track > .chart-bar`, `.chart-bar-value`)
  */
 
 :root {
@@ -71,6 +74,40 @@
   --status-ocr-bg: #eeeaf6;
   --status-ocr-fg: #3e2a6d;
   --status-ocr-border: #b3a5d4;
+
+  /* Chart palette (overridable in recipe/brand/brand.css).
+   * Categorical slots 1-8 sit in OKLCH L 0.44-0.74, C >= 0.118, distinct from ok/warn/err
+   * status colors, with adjacent-pair OKLab dE*100 >= 15 (normal) and >= 8 (protan/deutan/tritan).
+   * Leading 7 slots (--chart-cat-1 to --chart-cat-7) also pass all-pairs separation (dE*100 >= 15
+   * normal, >= 8 CVD) for scatter plots and small multiples. Slots marked "< 3:1 on sheet" need
+   * direct value labels or a companion table. */
+  --chart-cat-1: #005ea2; /* .chart-on-dark  (6.72:1 on sheet) */
+  --chart-cat-2: #5a9bdc; /* .chart-on-light (2.93:1 on sheet, < 3:1 on sheet) */
+  --chart-cat-3: #b9530f; /* .chart-on-dark  (4.88:1 on sheet) */
+  --chart-cat-4: #e8894a; /* .chart-on-light (2.59:1 on sheet, < 3:1 on sheet) */
+  --chart-cat-5: #842a64; /* .chart-on-dark  (8.41:1 on sheet) */
+  --chart-cat-6: #c6669f; /* .chart-on-light (3.62:1 on sheet) */
+  --chart-cat-7: #1dc6a6; /* .chart-on-light (2.17:1 on sheet, < 3:1 on sheet) */
+  --chart-cat-8: #6e65c2; /* .chart-on-dark  (4.88:1 on sheet) */
+  --chart-cat-rest: #b8bfc7; /* .chart-on-light (1.82:1 on sheet, < 3:1 on sheet; neutral remainder) */
+
+  --chart-series: var(--brand-primary);
+  --chart-seq-1: #d8e8f7; /* .chart-on-light (L=0.924, < 3:1 on sheet) */
+  --chart-seq-2: #99c1e6; /* .chart-on-light (L=0.795, < 3:1 on sheet) */
+  --chart-seq-3: #5a9bdc; /* .chart-on-light (L=0.674, < 3:1 on sheet) */
+  --chart-seq-4: #005ea2; /* .chart-on-dark  (L=0.473) */
+  --chart-seq-5: #162e51; /* .chart-on-dark  (L=0.302) */
+
+  --chart-div-neg: #b9530f; /* .chart-on-dark */
+  --chart-div-mid: #b8bfc7; /* .chart-on-light (< 3:1 on sheet) */
+  --chart-div-pos: #005ea2; /* .chart-on-dark */
+
+  --chart-wash: rgb(0 94 162 / 0.1);
+  --chart-band: rgb(86 92 101 / 0.09);
+  --chart-grid: var(--brand-line);
+  --chart-axis-ink: var(--brand-ink-soft);
+  --chart-label-on-dark: #ffffff;
+  --chart-label-on-light: var(--brand-ink);
 }
 
 /* Match Pico's light-theme selector specificity (:root:not([data-theme=dark])) so
@@ -1272,6 +1309,112 @@ input.user-invalid-fallback + .field-error {
   font-size: 0.9rem;
 }
 
+/* HTML & Chart.js Chart Primitives */
+.chart-canvas {
+  position: relative;
+  height: 190px;
+  margin: 0.25rem 0 1rem;
+}
+
+.chart-canvas-tall {
+  height: 260px;
+}
+
+.chart-segbar {
+  display: flex;
+  gap: 2px;
+  height: 28px;
+  margin: 0.5rem 0 0.4rem;
+}
+
+.chart-seg {
+  flex: 0 1 0;
+  min-width: 2px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  padding: 0 0.35rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.chart-on-dark {
+  color: var(--chart-label-on-dark);
+}
+
+.chart-on-light {
+  color: var(--chart-label-on-light);
+}
+
+.chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem 1rem;
+  padding: 0;
+  margin: 0 0 0.75rem;
+  font-size: 0.85rem;
+}
+
+.chart-legend > li {
+  list-style: none;
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.chart-swatch {
+  display: inline-block;
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.chart-bars {
+  display: grid;
+  grid-template-columns: max-content minmax(6rem, 1fr) max-content;
+  gap: 0.3rem 0.75rem;
+  align-items: center;
+  padding: 0;
+  margin: 0.5rem 0 1rem;
+}
+
+.chart-bars > li {
+  display: contents;
+  list-style: none;
+}
+
+.chart-bar-label {
+  justify-self: end;
+  font-size: 0.85rem;
+}
+
+.chart-bar-track {
+  display: block;
+  height: 12px;
+  background: var(--brand-thead-bg);
+  border-radius: 0 4px 4px 0;
+  overflow: hidden;
+}
+
+.chart-bar {
+  display: block;
+  height: 100%;
+  min-width: 1px;
+  background: var(--chart-series);
+  border-radius: 0 4px 4px 0;
+}
+
+.chart-bar-value {
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
 @media (forced-colors: active) {
   .busy-dot,
   .header-busy-rail-fill {
@@ -1300,7 +1443,11 @@ input.user-invalid-fallback + .field-error {
   }
 
   .site-header,
-  .app-header {
+  .app-header,
+  .chart-seg,
+  .chart-swatch,
+  .chart-bar-track,
+  .chart-bar {
     position: static;
     print-color-adjust: exact;
   }
