@@ -30,8 +30,9 @@ desktop.ini
 ~$*
 .~lock.*#
 
-# Personal agent settings (permission rules for this machine only).
+# Personal agent settings and instructions (this machine only; Claude Code loads both).
 .claude/settings.local.json
+CLAUDE.local.md
 
 # Local work plans (ephemeral agent scratchpad).
 docs/plans/

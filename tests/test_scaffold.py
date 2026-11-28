@@ -189,6 +189,7 @@ def test_scaffold_gitignore_drops_client_data_and_keeps_the_agent_kit(cli, tmp_p
     (sol / "docs" / "plans" / "scratch.md").write_text("plan\n")
     (sol / "docs" / "plan-scratch.md").write_text("plan\n")
     (sol / ".claude" / "settings.local.json").write_text("{}\n")
+    (sol / "CLAUDE.local.md").write_text("machine notes\n")
 
     tracked = _git_add(sol)
     assert {
@@ -206,6 +207,7 @@ def test_scaffold_gitignore_drops_client_data_and_keeps_the_agent_kit(cli, tmp_p
         "docs/plans/scratch.md",
         "docs/plan-scratch.md",
         ".claude/settings.local.json",
+        "CLAUDE.local.md",
     }.isdisjoint(tracked)
 
 
