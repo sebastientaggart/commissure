@@ -1,6 +1,6 @@
 """The example end to end, through the same CLI a person runs, over a copy of the corpus.
 
-The counts are the acceptance gate in recipe/AGENTS.md. If a change to the recipe moves one,
+The counts are the acceptance gate in AGENTS.md. If a change to the recipe moves one,
 the change is either a fix (update the counts and the contract together) or a regression.
 """
 

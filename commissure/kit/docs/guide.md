@@ -11,7 +11,7 @@ Each solution is its own project and git repository, depending on the `commissur
 ```text
 <solution>/
   pyproject.toml  Name, version, and `commissure~=X.Y.Z`; uv.lock pins the exact version
-  AGENTS.md       Rules for coding agents in this solution (CLAUDE.md imports it)
+  AGENTS.md       The solution's contract: purpose, inputs, domain & quarantine rules, acceptance gate (CLAUDE.md imports it)
   .agents/commissure/  Core's rules, these docs, and skills, for the installed version (never edited)
   README.md       What the solution does and how to run it
   .gitignore      Excludes workspace/, intake documents, and secrets (.env)
@@ -21,16 +21,14 @@ Each solution is its own project and git repository, depending on the `commissur
   tests/          Solution tests and fixtures (uv run pytest)
   workspace/      state.db, blobs/, outputs/ (created by the first run; local)
   recipe/
-    AGENTS.md     Operation purpose, recon notes, domain & quarantine rules, acceptance gate
     recipe.py     Entry point: defines STAGES (ordered list of Stage declarations) and optional INTERFACE
     schema.py     Strict Pydantic payload models (ConfigDict(extra="forbid"))
     extract.py    Per-item extraction → schema instance or RecordEnvelope
-    analyze.py    Cross-item group and run stages, entity/edge population
-    deliver.py    Renders outputs from workspace state into workspace/outputs/
+    *.py          More stage modules as the recipe grows (group and run stages, deliverables, INTERFACE)
     tools/        Optional pre-ingest fetchers/scripts that populate intake/ and read .env
 ```
 
-The scaffolded `recipe/recipe.py` declares no stages and fails at startup on purpose until the operator populates `intake/` and `docs/` and an agent completes reconnaissance in `recipe/AGENTS.md`.
+The scaffolded `recipe/recipe.py` declares no stages and fails at startup on purpose until the operator populates `intake/` and `docs/` and an agent completes reconnaissance in the contract (`AGENTS.md`).
 
 ---
 
@@ -112,6 +110,12 @@ STAGES = [
     ),
 ]
 ```
+
+### Group and Run Stages, Deliverables
+
+- **Group stages** (`subject="group"`, `group_by=...`) receive `group.items` for one group key; a **run stage** (`subject="run"`) receives one `Group` over every complete item. Incomplete items (no valid upstream record) land in `group.excluded` with a reason when `group_by` can place them from the locator or another field every item has; a `group_by` that reads upstream payloads can't place them, so they stay unplaced. Name what was excluded in the result rather than dropping it silently.
+- `ctx.map(fn, items)` runs per-item work inside a group or run stage on the run's bounded thread pool. Stages return a schema model or a `RecordEnvelope` and never touch SQLite.
+- **Deliverables** are ordinary run or group stages: they read upstream payloads in memory, write files into `ctx.outputs` (`<workspace>/outputs/<stage>/<run_id>/`), verify them structurally (exists, non-zero size, expected page/sheet/row counts, no external resource URLs), and return a record describing them. Template and brand files a stage reads are listed in `Stage(..., assets=(...))`, so editing one makes the stage stale.
 
 ### HTML Deliverables & Charts (`render_page`)
 

@@ -1,6 +1,6 @@
 """Item stage: the commenter's position and the topics they raise, as exact quotes.
 
-Deterministic on purpose: a fixed phrase list (recipe/AGENTS.md, Domain rules) beats a model
+Deterministic on purpose: a fixed phrase list (AGENTS.md, Domain rules) beats a model
 for a form this regular, and every result is a span core checks against the text.
 """
 

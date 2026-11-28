@@ -33,8 +33,8 @@ uv run commissure serve
 ## Layout
 
 ```text
-AGENTS.md, CLAUDE.md   rules for coding agents (core's are in .agents/commissure/)
-recipe/                the code: stages, schemas, interface; recipe/AGENTS.md is its contract
+AGENTS.md, CLAUDE.md   the solution's contract for coding agents (core's rules are in .agents/commissure/)
+recipe/                the code: stages, schemas, interface
 tests/                 tests and small synthetic fixtures (uv run pytest)
 docs/                  reference documents and operator notes, indexed in docs/README.md
 intake/                input documents (local; only intake/README.md is tracked)

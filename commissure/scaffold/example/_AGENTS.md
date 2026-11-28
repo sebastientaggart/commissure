@@ -1,6 +1,24 @@
-# Recipe: `__SOLUTION_NAME__` (example)
+# __SOLUTION_NAME__ (example)
 
-A worked example of a finished contract: what `investigate-solution` writes for a real solution, and what the operator approves before stage code exists. This file adds to core's rules (`../.agents/commissure/AGENTS.md`) and never overrides them.
+A Commissure solution: a project that depends on the `commissure` package (exact version in `uv.lock`). Read `.agents/commissure/AGENTS.md` first: core's rules for recipe authors apply here without exception, and this file adds to them and never overrides them.
+
+This file is the solution's contract, here a finished one: what the `investigate-solution` skill writes for a real solution and the operator approves before stage code exists. Keep it to the contract: measurements, recon output, history, and plans go in `docs/` (indexed in `docs/README.md`).
+
+## Working here
+
+- `.agents/commissure/`: core's rules, docs (`docs/guide.md`: recipe API and CLI; `docs/solutions.md`: lifecycle; `docs/architecture.md`), and skills, for the version in `.agents/commissure/VERSION`. It is core's: never edit it. `uv run commissure agent-kit` replaces it after a core upgrade.
+- `docs/README.md`: index of this solution's reference documents; read every file it names.
+- **This solution only.** Never edit commissure's installed code under `.venv/`. When a task needs a core change, stop and draft an upstream request (`.agents/commissure/AGENTS.md`, Boundaries).
+- **Git:** commit or push only when asked.
+
+```sh
+uv run commissure probe intake/<batch> --json
+uv run commissure run --step <stage> --limit 5 --json
+uv run commissure inspect --json
+uv run commissure serve                  # interface (if any) and /review
+uv run pytest
+uv run ruff check . && uv run ruff format --check .
+```
 
 ## Purpose
 

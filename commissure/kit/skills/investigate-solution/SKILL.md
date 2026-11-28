@@ -3,13 +3,13 @@ name: investigate-solution
 description: >-
   Reconnaissance for a populated Commissure solution before writing stage code.
   Reads docs/README.md and indexed notes, probes intake/, parses a scratch workspace
-  and runs commissure recon for measurements, and completes recipe/AGENTS.md. Use when
+  and runs commissure recon for measurements, and completes the contract in AGENTS.md. Use when
   asked to investigate, assess, explore, or plan a solution whose inputs are in place.
 ---
 
 # Investigate a solution
 
-Goal: complete `recipe/AGENTS.md` for operator review before writing any stage code.
+Goal: complete the contract sections of the solution's `AGENTS.md` for operator review before writing any stage code.
 
 ## 1. Read context
 
@@ -34,9 +34,9 @@ Goal: complete `recipe/AGENTS.md` for operator review before writing any stage c
 4. **Spot-check originals** against probe, parse, and recon. Every discrepancy becomes a domain rule, a quarantine rule, or a test fixture.
 5. **Split deterministic vs. LLM residue**: use regex, structure, and table topology first; reserve `ctx.llm` for genuine judgment residue and ask the operator if `allow_remote=True` is needed.
 
-## 3. Fill `recipe/AGENTS.md` and stop
+## 3. Fill the contract in `AGENTS.md` and stop
 
-Complete every existing section (delete none):
+Complete every contract section (delete none), and keep each to the contract: put probe and recon measurements, history, and longer reasoning in a file under `docs/` (indexed in `docs/README.md`) and cite it.
 - **Purpose**: operation, audience, outputs/interfaces, required extras (e.g. `commissure[docx]`).
 - **Inputs**: sources (`intake/<batch>`), roles, locators, file types, probe and OCR findings citing filenames.
 - **Domain rules**: each rule paired with the input that motivated it.
