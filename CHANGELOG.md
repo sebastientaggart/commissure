@@ -10,6 +10,8 @@ Changes to Commissure core that a solution author may need to act on. A solution
 ## Unreleased
 
 - **Upgrading:** `commissure new` also ignores `CLAUDE.local.md`, this machine's agent instructions (Claude Code loads it beside `CLAUDE.md`). In an existing solution, add `CLAUDE.local.md` to `.gitignore` beside `.claude/settings.local.json`.
+- **Upgrading:** The first time this core opens a workspace for writing (`commissure run`, `commissure prune`, `commissure sources`) it applies schema migration 10 automatically: it adds `extracted_text.pruned_at`, indexes `evidence(extracted_text_id)`, and updates the `current_text` and `evidence_review` views so pruned text bodies are never read as empty text. Back up `workspace/state.db` before first use where it is the only copy of verdicts (`docs/guide.md`, "Keeping Verdicts").
+- **Added:** `commissure prune [--workspace W] [--dry-run] [--vacuum] [--json]` clears the `text` and `structure` bodies (and FTS5 index entries) of superseded `extracted_text` rows that are not the newest for their `(item_version_id, parser)` and are not referenced by any `evidence` row, keeping the row, `parser_version`, `text_hash`, and parse outcome so `current_text`, `drift`, `current_outcomes`, `evidence_review`, and the verdict log remain unchanged. Pass `--vacuum` to run `VACUUM` afterwards and shrink `workspace/state.db` on disk.
 
 ## 0.4.0
 

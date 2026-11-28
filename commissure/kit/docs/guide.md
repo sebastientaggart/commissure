@@ -247,6 +247,21 @@ uv run commissure search "budget AND (personnel OR fringe)" --raw --parser ocr -
 
 Hits return locator, parser, page, and character offsets. Stages can also call `ctx.search(...)` on the main thread.
 
+### Pruning Superseded Parses (`commissure prune`)
+Because a parser's version includes a hash of its source code and library versions, upgrading core or editing a parser causes the next `commissure run --step parse` to store new `extracted_text` rows beside the old ones. To clear superseded `text` and `structure` bodies that are not referenced by any `evidence` row while preserving `parser_version`, `text_hash`, drift classification, and stage staleness:
+
+```sh
+# 1. Back up workspace/state.db first (see "Keeping Verdicts" below)
+# 2. Preview rows and bytes that would be cleared, by parser
+uv run commissure prune --dry-run --json
+
+# 3. Clear superseded unreferenced bodies and compact state.db with VACUUM
+#    (--vacuum requires free disk space roughly equal to state.db)
+uv run commissure prune --vacuum --json
+```
+
+Run `commissure prune` after parser changes or a core upgrade that re-parsed the corpus. Every newest row per `(item_version_id, parser)` and every row named by `evidence` is kept intact, so `current_text` and all reviewed evidence spans continue to resolve. Without `--vacuum`, `commissure prune` frees pages inside `state.db` and reports how many bytes `VACUUM` would reclaim.
+
 ### Entities and Edges (graph)
 A stage emits graph rows beside its payload; core indexes them against the outcome, so only the current snapshot shows and a rerun supersedes it:
 

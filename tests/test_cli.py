@@ -17,7 +17,17 @@ def test_version_matches_pyproject():
 
 def test_help_lists_promised_commands(cli):
     assert cli("--help").exit_code == 0
-    for command in ("probe", "run", "inspect", "recon", "search", "serve", "new", "agent-kit"):
+    for command in (
+        "probe",
+        "run",
+        "inspect",
+        "recon",
+        "search",
+        "prune",
+        "serve",
+        "new",
+        "agent-kit",
+    ):
         assert cli(command, "--help").exit_code == 0, command
 
 

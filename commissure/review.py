@@ -750,6 +750,8 @@ def render_instance(console: Console, d: dict[str, Any]) -> None:
             _line(
                 console, f"    ...{escape(before)} [bold]{escape(span)}[/bold] {escape(after)}..."
             )
+        elif e.get("pruned_at"):
+            _line(console, f"    (pruned at {escape(e['pruned_at'])}; check the original)")
         if e["url"]:
             _line(console, f"    {escape(e['url'])}")
     for o in d["originals"]:

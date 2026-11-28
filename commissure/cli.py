@@ -13,6 +13,7 @@ Commands (in a solution folder, `--recipe` and `--workspace` default to `recipe/
     commissure inspect [--workspace W] [--run <id|latest|failed>] [--stage S] [--subject K]
                        [--call ID] [--only-errors] [--limit N] [--json]
     commissure search <query> [--workspace W] [--limit N] [--json]
+    commissure prune [--workspace W] [--dry-run] [--vacuum] [--json]
     commissure sources relocate <old> <new> [--workspace W] [--dry-run] [--json]
     commissure sources retire <source-id> [--workspace W] [--dry-run] [--json]
     commissure serve [--recipe R] [--workspace W] [--host 127.0.0.1] [--port 8000]
@@ -80,6 +81,7 @@ from commissure.workspace import (
     WorkspaceLocked,
     lock,
     open_workspace,
+    prune_workspace,
 )
 
 EXIT_OK, EXIT_FAILED, EXIT_USAGE, EXIT_LOCKED = 0, 1, 2, 3
@@ -368,6 +370,69 @@ def recon(
         typer.echo(json.dumps(report, indent=2))
     else:
         render_recon(report, Console())
+    raise typer.Exit(EXIT_OK)
+
+
+@app.command()
+def prune(
+    workspace: Annotated[
+        Path | None,
+        typer.Option(envvar="COMMISSURE_WORKSPACE", help="Workspace directory."),
+    ] = None,
+    dry_run: Annotated[
+        bool,
+        typer.Option(
+            "--dry-run", help="Report superseded bodies that would be cleared; write nothing."
+        ),
+    ] = False,
+    vacuum: Annotated[
+        bool,
+        typer.Option(
+            "--vacuum",
+            help="Run VACUUM after pruning to reclaim freed pages (needs free disk ~ state.db).",
+        ),
+    ] = False,
+    as_json: Annotated[bool, typer.Option("--json", help="Machine-readable output.")] = False,
+) -> None:
+    """Clear superseded unreferenced extracted_text bodies while keeping rows and hashes."""
+    root = _search_root(workspace).resolve()
+    if not root.is_dir():
+        _fail_usage(f"workspace path {root} is not a directory")
+    if not (root / DB_NAME).is_file():
+        _fail_usage(f"{root} has no {DB_NAME}")
+    try:
+        with lock(root):
+            ws = open_workspace(root)
+            try:
+                report = prune_workspace(ws, dry_run=dry_run, vacuum=vacuum)
+            finally:
+                ws.close()
+    except WorkspaceLocked as exc:
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(EXIT_LOCKED) from None
+    except (WorkspaceError, ValueError) as exc:
+        _fail_usage(str(exc))
+    except sqlite3.Error as exc:
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(EXIT_FAILED) from None
+    if as_json:
+        typer.echo(json.dumps(report, indent=2))
+    else:
+        verb = "would prune" if dry_run else "pruned"
+        typer.echo(f"{verb} {report['pruned_rows']} row(s) ({report['pruned_bytes']:,} bytes)")
+        for entry in report["by_parser"]:
+            typer.echo(f"  {entry['parser']}: {entry['rows']} row(s), {entry['bytes']:,} bytes")
+        if report["vacuum"]:
+            typer.echo(
+                f"vacuumed {DB_NAME}: {report['db_bytes_before']:,} ->"
+                f" {report['db_bytes_after']:,} bytes"
+                f" (reclaimed {report['reclaimed_bytes']:,} bytes)"
+            )
+        else:
+            typer.echo(
+                f"VACUUM would reclaim ~{report['reclaimable_bytes']:,} bytes"
+                " (pass --vacuum to compact state.db)"
+            )
     raise typer.Exit(EXIT_OK)
 
 
