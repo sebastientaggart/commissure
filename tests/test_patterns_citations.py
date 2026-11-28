@@ -2,10 +2,7 @@
 
 from __future__ import annotations
 
-import shutil
-import tomllib
 from datetime import date
-from pathlib import Path
 
 import pytest
 
@@ -126,26 +123,3 @@ def test_prose_and_numeric_date_parsing_and_invalid_calendar_dates() -> None:
         assert parse_date(bad) is None
         assert parse_prose_date(bad) is None
         assert parse_numeric_date(bad) is None
-
-
-def test_patterns_package_passes_release_forbidden_scan(tmp_path: Path) -> None:
-    from commissure.tools import release
-
-    root = Path(__file__).resolve().parents[1]
-    patterns_dir = root / "commissure" / "patterns"
-    tree = tmp_path / "patterns"
-    shutil.copytree(
-        patterns_dir,
-        tree,
-        ignore=shutil.ignore_patterns("__pycache__", "*.pyc", ".DS_Store"),
-    )
-    local_forbid = root / "solutions" / ".forbid.toml"
-    extra = (
-        tuple(tomllib.loads(local_forbid.read_text(encoding="utf-8")).get("forbid", ()))
-        if local_forbid.is_file()
-        else ()
-    )
-    forbid = (*release.DEFAULT_FORBID, *extra)
-    assert release.scan_forbidden(tree, forbid) == []
-    (tree / "leak.py").write_text('LEAK = "/Users/alice/secret"\n', encoding="utf-8")
-    assert release.scan_forbidden(tree, forbid) != []

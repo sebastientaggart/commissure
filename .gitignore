@@ -4,7 +4,6 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 dist/
-# build/ also holds the generated release repos (commissure release), each its own git repo.
 build/
 *.egg-info/
 
@@ -17,10 +16,9 @@ state.db-shm
 state.db-journal
 workspace.lock
 
-# Each solution under solutions/<name>/ is its own git repository; core tracks only
-# solutions/.gitkeep. Nested solution checkouts and solutions/.forbid.toml stay local.
-solutions/*
-!solutions/.gitkeep
+
+# Solutions are separate projects; a solution checked out here is never part of core.
+/solutions/
 
 # Secrets stay local.
 .env

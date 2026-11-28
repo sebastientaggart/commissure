@@ -1,19 +1,17 @@
 name: CI
 
 # Prose only: no test or lint reads these. A push touching anything else still runs CI.
-# Markdown inside commissure/ (scaffold template, vendored licenses) ships and is tested.
+# Markdown inside commissure/ (templates, the agent kit, vendored licenses) ships and is tested.
 on:
   push:
     branches: [main]
     paths-ignore:
       - "*.md"
-      - ".agents/**"
       - "docs/**/*.md"
       - "docs/**/*.svg"
   pull_request:
     paths-ignore:
       - "*.md"
-      - ".agents/**"
       - "docs/**/*.md"
       - "docs/**/*.svg"
 
@@ -49,5 +47,8 @@ jobs:
 
       # Serial on purpose: -n auto (4 workers) ran 259s and 335s here against 145s serial,
       # though it is ~5x faster on a laptop. Likely disk contention; unmeasured.
+      # The integration test builds the wheel and runs a new project's uv sync, tests, and ruff.
       - name: Run test suite
         run: uv run pytest tests -n0
+        env:
+          COMMISSURE_SCAFFOLD_INTEGRATION: "1"

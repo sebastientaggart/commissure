@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "deny": [
+      "Edit(/.venv/**)",
+      "Edit(/.agents/commissure/**)",
+      "Bash(gh issue create:*)"
+    ]
+  }
+}

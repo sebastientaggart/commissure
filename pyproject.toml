@@ -1,6 +1,6 @@
 [project]
 name = "commissure"
-version = "0.3.0"
+version = "0.4.0"
 description = "Local substrate for coding agents working on messy client data and document operations."
 readme = "README.md"
 license = "MIT"
@@ -76,10 +76,7 @@ source-exclude = ["**/.DS_Store"]
 wheel-exclude = ["**/.DS_Store"]
 
 [tool.pytest.ini_options]
-testpaths = [
-    "tests",
-    "solutions",
-]
+testpaths = ["tests"]
 norecursedirs = [
     "workspace",
     "intake",
@@ -98,7 +95,8 @@ addopts = "-ra --strict-markers -n auto"
 line-length = 100
 target-version = "py312"
 # Markdown is prose (reference documents keep aligned comments in fenced code); ruff formats Python.
-extend-exclude = ["*.md"]
+# Templates are linted as the projects they become (tests/test_scaffold.py).
+extend-exclude = ["*.md", "commissure/scaffold/project", "commissure/scaffold/example"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP", "SIM"]
